@@ -1,0 +1,14 @@
+business_type: "Reverse"
+current_mode: project        # project / operation
+milestone: M0                # M0 착수준비 / M1 WBS / M-X 운영진입 (코드 정의: RACI §7.7)
+wbs_track: B        # A(Forward/Internal) / B(Reverse) — 세부 마일스톤 트랙
+milestones:
+  - code: B1
+    status: 대기
+    evidence: ""
+  - code: B2
+    status: 대기
+    evidence: ""
+  - code: B3
+    status: 대기
+    evidence: ""

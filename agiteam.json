@@ -1,0 +1,77 @@
+{
+  "project": {
+    "name": "tos",
+    "displayName": "tos",
+    "workspace": {
+      "name": "AGI개발팀",
+      "color": "Indigo"
+    }
+  },
+  "persona": {
+    "dir": "brain",
+    "commonFile": "brain/Shared/persona.md"
+  },
+  "team": [
+    {
+      "role": "DeveloperBE",
+      "name": "박개발",
+      "agent": "claude",
+      "command": "claude --dangerously-skip-permissions",
+      "layout": "middle_top"
+    },
+    {
+      "role": "DeveloperFE",
+      "name": "프개발",
+      "agent": "claude",
+      "command": "claude --dangerously-skip-permissions",
+      "layout": "middle_mid"
+    },
+    {
+      "role": "QA",
+      "name": "홍감리",
+      "agent": "codex",
+      "command": "codex --dangerously-bypass-approvals-and-sandbox",
+      "layout": "middle_bottom"
+    },
+    {
+      "role": "Architect",
+      "name": "김아키",
+      "agent": "codex",
+      "command": "codex --dangerously-bypass-approvals-and-sandbox",
+      "layout": "right_top"
+    },
+    {
+      "role": "DevOps",
+      "name": "김데옵",
+      "agent": "codex",
+      "command": "codex --dangerously-bypass-approvals-and-sandbox",
+      "layout": "right_mid"
+    },
+    {
+      "role": "Designer",
+      "name": "장이너",
+      "agent": "codex",
+      "command": "codex --dangerously-bypass-approvals-and-sandbox",
+      "layout": "right_bottom"
+    }
+  ],
+  "pm": {
+    "name": "박피엠",
+    "agent": "claude",
+    "command": "claude --dangerously-skip-permissions",
+    "startupFiles": [
+      "brain/PM/persona.md",
+      "documents/03.management/01.착수준비/IN-10_수행계획서/IN-10_수행계획서.latest.md",
+      "documents/03.management/01.착수준비/IN-10_수행계획서/IN-10_산출물리스트.latest.md",
+      "documents/03.management/01.착수준비/IN-20_WBS/IN-20_WBS_Reverse.latest.md",
+      "documents/00.standard/RACI매트릭스.latest.md"
+    ],
+    "startupMessage": "팀 워크스페이스 셋업이 완료되었습니다. 먼저 brain/PM/persona.md(원형+인스턴스)·IN-10 수행계획서·IN-10 산출물리스트를 읽어 셋업 상태를 점검하고, 각 팀원 surface를 cmux read-screen으로 확인하세요. 사업 유형·현재 모드·마일스톤·WBS 트랙은 시스템 프롬프트에 주입된 project_state.yaml 값(business_type/current_mode/milestone/wbs_track)을 사용하세요(오케스트레이터에게 다시 묻지 마세요). WBS는 wbs_track 값에 맞는 것만 보세요 — A면 IN-20_WBS_Forward_Internal, B면 IN-20_WBS_Reverse. WBS는 작업분해 확인용입니다. milestone이 M1이면 project_state.yaml milestones에서 현재 세부 마일스톤 진행 상태를 확인하세요(마일스톤 코드 정의는 RACI매트릭스 §7.7). §3.15에 따라 객관식 선택지 UI(AskUserQuestion·라디오 버튼·번호 선택지) 절대 금지 — 모든 오케스트레이터 질문은 평문으로."
+  },
+  "settings": {
+    "readyTimeout": 30,
+    "postLaunchDelay": 3,
+    "readySignalTimeout": 60,
+    "maxAutoSubmits": 5
+  }
+}

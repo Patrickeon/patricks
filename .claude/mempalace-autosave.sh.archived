@@ -1,0 +1,128 @@
+#!/bin/bash
+# MemPalace 자동 저장 래퍼 (AgiBuilder 템플릿 — 프로젝트 무관)
+# Claude Code Stop Hook에서 호출됨 — 매 턴 PM 답변 완료 시 실행
+#
+# 동작:
+#   1. stdin에서 Claude Code가 전달하는 JSON을 읽음
+#   2. transcript_path에서 현재 세션의 .jsonl 경로 추출
+#   3. PM 세션 게이팅 — PM 페르소나가 있는 세션만 진행 (다른 역할 세션 스킵)
+#   4. ChromaDB에서 현재 transcript_path 레코드를 먼저 삭제
+#      (mempalace 'convo miner'가 이미 본 파일은 스킵하므로, 삭제해야 재인덱싱됨)
+#   5. mempalace mine --mode convos 실행 → 현재 세션 최신 상태 전체 재저장
+#   6. block하지 않음 — 백그라운드 실행, AI 응답 지연 없음
+#
+# wing 이름:
+#   - 프로젝트 디렉토리명을 소문자로 변환해서 사용
+#   - 예: ~/Projects/Supports/ → wing=supports
+#         ~/Projects/acme-hr/ → wing=acme-hr
+#
+# 이유:
+#   - mempalace convo_miner는 파일명만 보고 skip (check_mtime=False)
+#   - 따라서 "매 턴 near real-time 저장"을 위해 매번 기존 레코드 삭제 후 재마이닝
+#
+# 로그: ~/.mempalace/hook_state/autosave.log
+# 원천: Supports/system/scripts/mempalace-autosave.sh (세션 #88 검증판)
+
+set -e
+
+# ─────────────────────────────────────────────────────────────────
+# 프로젝트 루트 자동 감지 (스크립트는 .claude/ 에 위치 → 한 단계 위)
+# ─────────────────────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+WING="$(basename "$PROJECT_ROOT" | tr '[:upper:]' '[:lower:]')"
+
+# ─────────────────────────────────────────────────────────────────
+# MemPalace 실행 환경 (환경변수 우선, command -v 폴백, 하드코딩 최후)
+# ─────────────────────────────────────────────────────────────────
+MEMPALACE_BIN="${MEMPALACE_BIN:-$(command -v mempalace 2>/dev/null || echo "/Users/ppillip/Library/Python/3.9/bin/mempalace")}"
+MEMPALACE_PY="${MEMPALACE_PY:-$(command -v python3 2>/dev/null || echo "/Library/Developer/CommandLineTools/usr/bin/python3")}"
+PALACE_PATH="$HOME/.mempalace/palace"
+COLLECTION_NAME="mempalace_drawers"
+LOG_DIR="$HOME/.mempalace/hook_state"
+LOG_FILE="$LOG_DIR/autosave.log"
+
+mkdir -p "$LOG_DIR"
+
+# ─────────────────────────────────────────────────────────────────
+# stdin에서 Claude Code JSON 읽기
+# ─────────────────────────────────────────────────────────────────
+INPUT=$(cat)
+
+TRANSCRIPT_PATH=$(echo "$INPUT" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    print(data.get('transcript_path', ''))
+except Exception as e:
+    print('', file=sys.stderr)
+" 2>/dev/null)
+
+SESSION_ID=$(echo "$INPUT" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    print(data.get('session_id', 'unknown')[:8])
+except Exception:
+    print('unknown')
+" 2>/dev/null)
+
+TS=$(date '+%H:%M:%S')
+
+# transcript_path 유효성 체크
+if [ -z "$TRANSCRIPT_PATH" ] || [ ! -f "$TRANSCRIPT_PATH" ]; then
+    echo "[$TS] [$SESSION_ID] [$WING] transcript_path 없음 또는 파일 없음: $TRANSCRIPT_PATH" >> "$LOG_FILE"
+    echo '{}'
+    exit 0
+fi
+
+# ─────────────────────────────────────────────────────────────────
+# PM 세션 게이팅
+# transcript에 PM 페르소나 마커가 있을 때만 진행
+# (DeveloperBE/FE·Architect·DevOps·Designer·QA 세션은 스킵)
+# ─────────────────────────────────────────────────────────────────
+if ! grep -q -E "PM 페르소나|당신은 PM|Project Manager" "$TRANSCRIPT_PATH" 2>/dev/null; then
+    echo "[$TS] [$SESSION_ID] [$WING] PM 세션 아님 — 스킵" >> "$LOG_FILE"
+    echo '{}'
+    exit 0
+fi
+
+# transcript 디렉토리 기준으로 마이닝 (디렉토리 단위)
+TRANSCRIPT_DIR=$(dirname "$TRANSCRIPT_PATH")
+
+# ─────────────────────────────────────────────────────────────────
+# 백그라운드 마이닝 (AI 응답 지연 방지)
+# ─────────────────────────────────────────────────────────────────
+(
+    echo "[$TS] [$SESSION_ID] [$WING] autosave start: $TRANSCRIPT_PATH" >> "$LOG_FILE"
+
+    # Step A: ChromaDB에서 현재 세션 jsonl 기존 레코드 삭제
+    # (mempalace mine이 재처리하도록 '처음 본 파일'로 만들기)
+    "$MEMPALACE_PY" - <<PYEOF >> "$LOG_FILE" 2>&1
+import sys
+try:
+    import chromadb
+    client = chromadb.PersistentClient(path="$PALACE_PATH")
+    try:
+        coll = client.get_collection("$COLLECTION_NAME")
+    except Exception:
+        print("  [purge] collection not found (first run) — skip delete")
+        sys.exit(0)
+    before = coll.count()
+    coll.delete(where={"source_file": "$TRANSCRIPT_PATH"})
+    after = coll.count()
+    print(f"  [purge] deleted {before - after} records for current session jsonl")
+except Exception as e:
+    print(f"  [purge] ERROR: {e}")
+PYEOF
+
+    # Step B: mempalace mine 실행 — 현재 jsonl을 처음 본 파일로 인식하여 전체 재인덱싱
+    "$MEMPALACE_BIN" mine "$TRANSCRIPT_DIR" --mode convos --wing "$WING" --agent claude-pm >> "$LOG_FILE" 2>&1
+
+    END_TS=$(date '+%H:%M:%S')
+    echo "[$END_TS] [$SESSION_ID] [$WING] autosave done" >> "$LOG_FILE"
+) &
+
+# Hook은 즉시 반환 (block 안 함)
+echo '{}'
+exit 0

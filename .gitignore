@@ -1,0 +1,20 @@
+# 환경변수 비밀값
+.env
+.env.local
+*.secret
+
+# Claude Code 로컬 설정 (hook 경로 유저별 상이)
+.claude/settings.local.json
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# 빌드/캐시
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
