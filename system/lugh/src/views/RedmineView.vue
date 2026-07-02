@@ -4,17 +4,34 @@ import { onMounted, computed } from 'vue'
 import { useRedmineStore, REDMINE_STATUSES } from '@/stores/redmine'
 import type { RedmineIssue, IssueCreatePayload } from '@/stores/redmine'
 import { useProjectStore } from '@/stores/project'
+import { useSettingsStore } from '@/stores/settings'
+import { useWorkspaceStore } from '@/stores/workspace'
 import AppModal from '@/components/AppModal.vue'
 import { ref } from 'vue'
 
-const redmineStore = useRedmineStore()
-const projectStore = useProjectStore()
+const redmineStore    = useRedmineStore()
+const projectStore    = useProjectStore()
+const settingsStore   = useSettingsStore()
+const workspaceStore  = useWorkspaceStore()
+
+// ── 프로젝트 ID 헬퍼 ──────────────────────────────────────────
+const projectId = computed(() =>
+  settingsStore.redmineProjectId || undefined
+)
+
+// #15: 레드마인 패널은 PM 시점 화면 — 역할별 키 api_key_PM 사용 (없으면 백엔드가 단일 키 fallback)
+// 향후 에이전트별 호출 경로에서는 각 역할명을 전달해 재사용
+const CURRENT_PANEL_ROLE = 'PM'
 
 onMounted(async () => {
   // DV60-004: API 키 상태 확인
   await redmineStore.loadApiKeyStatus()
-  // DV60-003: 실 API 시도 (실패 시 mock 폴백)
-  await redmineStore.fetchIssues(projectStore.workspaceId ?? undefined)
+  // DV60-003: 실 API 시도 (#14 fix: projectId 전달, #15 fix: role 전달)
+  await redmineStore.fetchIssues(
+    projectStore.workspaceId ?? undefined,
+    projectId.value,
+    CURRENT_PANEL_ROLE,
+  )
 })
 
 // ── 이슈 생성 폼 ──────────────────────────────────────────
@@ -40,6 +57,7 @@ async function submitCreate() {
   await redmineStore.createIssueApi(
     projectStore.workspaceId ?? undefined,
     createForm.value,
+    CURRENT_PANEL_ROLE,
   )
   redmineStore.closeCreateModal()
   resetCreateForm()
@@ -58,6 +76,8 @@ async function changeStatus(statusId: number) {
   await redmineStore.updateIssueApi(
     projectStore.workspaceId ?? undefined,
     updated,
+    undefined,
+    CURRENT_PANEL_ROLE,
   )
 }
 
@@ -72,6 +92,8 @@ async function changeDoneRatio(e: Event) {
   await redmineStore.updateIssueApi(
     projectStore.workspaceId ?? undefined,
     updated,
+    undefined,
+    CURRENT_PANEL_ROLE,
   )
 }
 
@@ -105,9 +127,18 @@ const trackerOptions = [
     <div class="rm-toolbar">
       <span class="rm-title">레드마인</span>
       <div class="rm-actions">
-        <button class="tb-btn" @click="redmineStore.fetchIssues(projectStore.workspaceId ?? undefined)">🔄</button>
+        <button
+          class="tb-btn"
+          @click="redmineStore.fetchIssues(projectStore.workspaceId ?? undefined, projectId, CURRENT_PANEL_ROLE)"
+        >🔄</button>
         <button class="tb-btn primary" @click="redmineStore.openCreateModal()">＋ 이슈 생성</button>
       </div>
+    </div>
+
+    <!-- #14 fix: 프로젝트 ID 미설정 안내 -->
+    <div v-if="!settingsStore.redmineProjectId" class="project-id-notice">
+      ⚙️ 레드마인 프로젝트 ID가 설정되지 않아 전체 이슈가 표시됩니다.
+      <button class="notice-link" @click="workspaceStore.openSettings()">설정에서 입력하기 →</button>
     </div>
 
     <!-- 이슈 목록 -->
@@ -269,6 +300,30 @@ const trackerOptions = [
   background: rgba(99,102,241,0.12);
   border-color: rgba(99,102,241,0.4);
   color: var(--accent);
+}
+
+/* ── 프로젝트 ID 미설정 안내 (#14) ── */
+.project-id-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(251,191,36,0.08);
+  border-bottom: 1px solid rgba(251,191,36,0.25);
+  color: var(--busy);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.notice-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  white-space: nowrap;
 }
 
 /* ── 이슈 목록 ── */
@@ -434,4 +489,9 @@ const trackerOptions = [
 .btn-ghost { background: var(--bg-panel-2); color: var(--text-primary); }
 .btn-primary { background: linear-gradient(135deg, #5eead4, #38bdf8); color: #041016; border: none; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── 라이트 모드 보정 ── */
+[data-theme="light"] .issue-row:hover    { background: rgba(124,92,191,0.07); }
+[data-theme="light"] .issue-row.selected { background: rgba(124,92,191,0.13); }
+[data-theme="light"] .detail-panel       { box-shadow: -4px 0 16px rgba(80,40,0,0.10); }
 </style>
