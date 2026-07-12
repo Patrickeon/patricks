@@ -3,9 +3,9 @@
 import { onMounted } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { invoke } from '@tauri-apps/api/core'
 import { runHealthCheck } from '@/ipc/health'
-import { validateCredential, saveCredential } from '@/ipc/credential'
+import { validateCredential, saveCredential, checkClaudeOauth as ipcCheckClaudeOauth } from '@/ipc/credential'
+import { writeProjectState } from '@/ipc/workspace'
 import { useProjectStore } from '@/stores/project'
 import { useThemeStore } from '@/stores/theme'
 
@@ -47,10 +47,7 @@ async function saveProjectState() {
   if (!projectStore.workspaceId) return
   settingsStore.isSaving = true
   try {
-    await invoke('write_project_state', {
-      workspaceId: projectStore.workspaceId,
-      state: settingsStore.projectStateEdit,
-    })
+    await writeProjectState(projectStore.workspaceId, settingsStore.projectStateEdit)
   } catch (e) {
     console.error('project_state 저장 실패', e)
   } finally {
@@ -92,7 +89,7 @@ const oauthStatus = ref<'unknown' | 'ok' | 'none'>('unknown')
 
 async function checkClaudeOAuth() {
   try {
-    const result = await invoke<{ ok: boolean }>('check_claude_oauth')
+    const result = await ipcCheckClaudeOauth()
     oauthStatus.value = result.ok ? 'ok' : 'none'
   } catch {
     oauthStatus.value = 'none'

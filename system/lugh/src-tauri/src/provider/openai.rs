@@ -12,11 +12,12 @@ use uuid::Uuid;
 use crate::models::{
     error::AppError,
     provider::{
-        AiProviderKind, CredentialRef, HealthStatus, MessageRole, ProviderEvent, ProviderHealth,
-        ProviderMessage, ProviderMessageRequest, ProviderMessageResult, ProviderSessionRef,
-        TokenUsage,
+        AiProviderKind, CredentialRef, HealthStatus, MessageRole, ProviderContentBlock,
+        ProviderEvent, ProviderHealth, ProviderMessage, ProviderMessageRequest,
+        ProviderMessageResult, ProviderSessionRef, TokenUsage,
     },
 };
+use crate::chat_attachment::document_block_text;
 use super::{AiProvider, ProviderEventSink, build_http_client, parse_sse_data};
 
 const OPENAI_RESPONSES_URL: &str = "https://api.openai.com/v1/responses";
@@ -45,6 +46,37 @@ impl OpenAiApiAdapter {
         headers
     }
 
+    /// content_blocks가 있으면 Responses API input content 배열로 변환 (DS-40 §5.3, #21)
+    /// 텍스트/문서 추출 결과 → input_text, 이미지 → input_image (data URL)
+    fn message_content(m: &ProviderMessage) -> serde_json::Value {
+        match &m.content_blocks {
+            Some(blocks) if !blocks.is_empty() => {
+                let arr: Vec<serde_json::Value> = blocks
+                    .iter()
+                    .map(|b| match b {
+                        ProviderContentBlock::Text { text } => {
+                            serde_json::json!({ "type": "input_text", "text": text })
+                        }
+                        ProviderContentBlock::Image { media_type, base64_data, .. } => {
+                            serde_json::json!({
+                                "type": "input_image",
+                                "image_url": format!("data:{};base64,{}", media_type, base64_data),
+                            })
+                        }
+                        ProviderContentBlock::DocumentText {
+                            filename, media_type, extracted_text, ..
+                        } => serde_json::json!({
+                            "type": "input_text",
+                            "text": document_block_text(filename, media_type, extracted_text),
+                        }),
+                    })
+                    .collect();
+                serde_json::Value::Array(arr)
+            }
+            _ => serde_json::Value::String(m.content.clone()),
+        }
+    }
+
     /// 내부 메시지를 OpenAI Responses API 형식으로 변환 (DS-40 §5.3)
     fn build_request_body(request: &ProviderMessageRequest, streaming: bool) -> serde_json::Value {
         let input: Vec<serde_json::Value> = request
@@ -57,7 +89,7 @@ impl OpenAiApiAdapter {
                         MessageRole::Assistant => "assistant",
                         MessageRole::System => "system",
                     },
-                    "content": m.content,
+                    "content": Self::message_content(m),
                 })
             })
             .collect();
@@ -300,7 +332,9 @@ mod tests {
             messages: vec![ProviderMessage {
                 role: MessageRole::User,
                 content: "Hello".into(),
+                content_blocks: None,
             }],
+            attachments: vec![],
             temperature: Some(0.7),
             max_tokens: Some(2048),
             tools: vec![],
@@ -309,6 +343,48 @@ mod tests {
         assert_eq!(body["model"], "gpt-4.1");
         assert_eq!(body["instructions"], "instructions");
         assert_eq!(body["stream"], true);
+        assert_eq!(body["input"][0]["content"], "Hello");
+    }
+
+    #[test]
+    fn test_build_request_body_with_content_blocks() {
+        // #21: input_text + input_image data URL 변환 (DS-40 §5.4)
+        let req = ProviderMessageRequest {
+            session_id: "s1".into(),
+            provider: AiProviderKind::OpenAi,
+            model: "gpt-4.1".into(),
+            system_prompt: "instructions".into(),
+            messages: vec![ProviderMessage {
+                role: MessageRole::User,
+                content: "이미지를 검토해 주세요.".into(),
+                content_blocks: Some(vec![
+                    ProviderContentBlock::Text { text: "이미지를 검토해 주세요.".into() },
+                    ProviderContentBlock::Image {
+                        attachment_id: "att-1".into(),
+                        media_type: "image/png".into(),
+                        base64_data: "iVBORw0KGgo=".into(),
+                    },
+                    ProviderContentBlock::DocumentText {
+                        attachment_id: "att-2".into(),
+                        filename: "a.txt".into(),
+                        media_type: "text/plain".into(),
+                        extracted_text: "본문".into(),
+                        truncated: true,
+                    },
+                ]),
+            }],
+            attachments: vec![],
+            temperature: None,
+            max_tokens: None,
+            tools: vec![],
+        };
+        let body = OpenAiApiAdapter::build_request_body(&req, true);
+        let content = &body["input"][0]["content"];
+        assert_eq!(content[0]["type"], "input_text");
+        assert_eq!(content[1]["type"], "input_image");
+        assert_eq!(content[1]["image_url"], "data:image/png;base64,iVBORw0KGgo=");
+        assert_eq!(content[2]["type"], "input_text");
+        assert_eq!(content[2]["text"], "[첨부 문서: a.txt, text/plain]\n본문");
     }
 
     #[test]

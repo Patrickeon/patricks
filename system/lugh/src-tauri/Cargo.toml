@@ -47,6 +47,10 @@ chrono = { version = "0.4", features = ["serde"] }
 sha2 = "0.10"
 hex = "0.4"
 
+# Chat attachment (#21): base64 encode/decode + PDF text layer extraction
+base64 = "0.22"
+pdf-extract = "0.7"
+
 # SSE / streaming utilities
 futures-util = "0.3"
 

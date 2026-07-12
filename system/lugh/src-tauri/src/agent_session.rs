@@ -10,8 +10,10 @@ use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
 use crate::{
+    chat_attachment,
     credential::CredentialStoreService,
     models::{
+        attachment::PreparedChatAttachment,
         error::{AppError, AppResult},
         message::{
             AgentMessage, AgentMessageCompleted, AgentMessageDelta, AgentMessageFailed,
@@ -255,10 +257,12 @@ impl AgentSessionService {
     // ---- 메시지 전송 ----
 
     /// agent session에 메시지를 전송하고 streaming 응답을 event로 emit한다.
+    /// `attachments`가 비어있으면 기존 텍스트 전용 동작과 동일하다 (DS-60 §3.2, #21).
     pub async fn send_message(
         &self,
         session_id: &str,
         content: &str,
+        attachments: Vec<PreparedChatAttachment>,
         config: &AgiteamConfig,
         default_model: &str,
     ) -> AppResult<MessageAck> {
@@ -267,6 +271,41 @@ impl AgentSessionService {
         // ready 상태 확인
         if session.state != AgentLifecycleState::Ready {
             return Err(AppError::session_not_ready(session_id));
+        }
+
+        let provider_kind = session.provider.clone();
+        let account = format!("default-{}", provider_kind);
+        // Claude provider 어댑터 선택:
+        //   1순위: keychain API 키 (AgiTeamBuilder/claude)
+        //   2순위: Claude CLI 서브프로세스 (OAuth rate_limit 우회)
+        // ※ #21: 첨부 capability(vision) 검증을 위해 상태 전이 전에 어댑터를 확정한다
+        let adapter: Box<dyn crate::provider::AiProvider> = match provider_kind {
+            AiProviderKind::Claude => {
+                match CredentialStoreService::get_secret(&provider_kind, &account) {
+                    Ok(api_key) => {
+                        // API 키 있음 → 직접 API 사용
+                        provider::create_provider(&provider_kind, api_key)
+                    }
+                    Err(_) => {
+                        // API 키 없음 → CLI 어댑터 사용 (rate_limit 없음, 이미지 미지원)
+                        Box::new(crate::provider::claude_cli::ClaudeCliAdapter::new())
+                    }
+                }
+            }
+            _ => {
+                let secret = CredentialStoreService::get_secret(&provider_kind, &account)?;
+                provider::create_provider(&provider_kind, secret)
+            }
+        };
+
+        // #21: 첨부 검증 — 한도·ready 상태·provider capability (DS-40 §7.3)
+        // 하나라도 위반이면 상태 전이·메시지 저장 없이 전송 전체를 거절한다 (조용한 누락 금지)
+        if !attachments.is_empty() {
+            chat_attachment::validate_attachments_for_send(
+                content,
+                &attachments,
+                adapter.supports_vision(),
+            )?;
         }
 
         // user 메시지 저장
@@ -297,7 +336,6 @@ impl AgentSessionService {
         let app_handle = self.app_handle.clone();
         let session_id_owned = session_id.to_string();
         let role_owned = session.role.clone();
-        let provider_kind = session.provider.clone();
         let workspace_root = self.workspace_root.clone();
 
         // persona bundle 재생성 (최신 내용 보장)
@@ -313,36 +351,22 @@ impl AgentSessionService {
             .map(|m| ProviderMessage {
                 role: m.role.clone(),
                 content: m.content.clone(),
+                content_blocks: None,
             })
             .collect();
+
+        // #21: 첨부가 있으면 content_blocks가 provider 변환의 정본 (DS-40 §3.2)
+        // content에는 사용자가 입력한 순수 텍스트만 유지한다
+        let content_blocks = if attachments.is_empty() {
+            None
+        } else {
+            Some(chat_attachment::build_content_blocks(content, &attachments))
+        };
         provider_messages.push(ProviderMessage {
             role: MessageRole::User,
             content: content.to_string(),
+            content_blocks,
         });
-
-        let account = format!("default-{}", provider_kind);
-        // Claude provider 어댑터 선택:
-        //   1순위: keychain API 키 (AgiTeamBuilder/claude)
-        //   2순위: Claude CLI 서브프로세스 (OAuth rate_limit 우회)
-        //   3순위: Claude Code OAuth 토큰 직접 API (rate_limit 위험 있음)
-        let adapter: Box<dyn crate::provider::AiProvider> = match provider_kind {
-            AiProviderKind::Claude => {
-                match CredentialStoreService::get_secret(&provider_kind, &account) {
-                    Ok(api_key) => {
-                        // API 키 있음 → 직접 API 사용
-                        provider::create_provider(&provider_kind, api_key)
-                    }
-                    Err(_) => {
-                        // API 키 없음 → CLI 어댑터 사용 (rate_limit 없음)
-                        Box::new(crate::provider::claude_cli::ClaudeCliAdapter::new())
-                    }
-                }
-            }
-            _ => {
-                let secret = CredentialStoreService::get_secret(&provider_kind, &account)?;
-                provider::create_provider(&provider_kind, secret)
-            }
-        };
 
         let request = ProviderMessageRequest {
             session_id: session_id.to_string(),
@@ -350,6 +374,7 @@ impl AgentSessionService {
             model: default_model.to_string(),
             system_prompt,
             messages: provider_messages,
+            attachments: chat_attachment::to_provider_attachments(&attachments),
             temperature: None,
             max_tokens: Some(8192),
             tools: vec![],

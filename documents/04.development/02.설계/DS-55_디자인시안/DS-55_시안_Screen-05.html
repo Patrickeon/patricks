@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DS-55 시안 Screen-05 산출물 뷰어</title>
+  <link rel="stylesheet" href="./DS-55_mockup.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand"><div class="mark">A</div><div>산출물 뷰어 / 에디터</div><span class="pill">Shared §6 version policy</span></div>
+      <div class="nav"><button class="btn">Diff</button><button class="btn">편집</button><button class="btn primary">저장</button></div>
+    </header>
+    <section class="page" style="display:grid;grid-template-columns:300px 1fr 330px;gap:18px;">
+      <aside class="panel" style="padding:16px;overflow:hidden;">
+        <div class="section-title">파일 트리</div>
+        <div class="terminal" style="line-height:1.9;">
+          documents/<br>
+          &nbsp;04.development/<br>
+          &nbsp;&nbsp;01.분석/<br>
+          &nbsp;&nbsp;&nbsp;<span style="color:var(--primary);">AN-40_요구사항명세서.latest.md</span><br>
+          &nbsp;&nbsp;02.설계/<br>
+          &nbsp;&nbsp;&nbsp;DS-55_디자인시안/<br>
+          &nbsp;&nbsp;&nbsp;<span style="color:var(--primary);">DD120_화면설계서.latest.md</span><br>
+          &nbsp;&nbsp;&nbsp;_archive/ <span class="muted">접힘</span><br>
+          brain/<br>
+          &nbsp;PM/persona.md<br>
+          &nbsp;Designer/persona.md
+        </div>
+      </aside>
+      <section class="panel" style="padding:22px;overflow:hidden;">
+        <div class="between"><div><h2>AN-40 요구사항명세서</h2><p>마크다운 렌더 뷰 · Mermaid/표/코드블록 지원</p></div><span class="badge info">읽기 모드</span></div>
+        <article style="margin-top:20px;background:#0c121d;border:1px solid var(--line-soft);border-radius:8px;padding:20px;height:650px;overflow:hidden;">
+          <h1 style="font-size:30px;">AN-40 요구사항명세서</h1>
+          <p style="margin-top:12px;">AgiTeamBuilder Desktop GUI 앱이 구현해야 할 기능 요구사항과 비기능 요구사항을 정의한다.</p>
+          <h2 style="margin-top:26px;">화면-요구사항 추적표</h2>
+          <table class="table" style="margin-top:10px;">
+            <tr><th>화면 ID</th><th>화면명</th><th>관련 FR</th><th>우선순위</th></tr>
+            <tr><td>Screen-01</td><td>런처 / 시작 화면</td><td>FR-0101~0104</td><td>P1</td></tr>
+            <tr><td>Screen-03</td><td>팀 부팅 진행</td><td>FR-0201~0209</td><td>P1</td></tr>
+            <tr><td>Screen-04</td><td>팀 워크스페이스</td><td>FR-0301~0309</td><td>P1</td></tr>
+            <tr><td>Screen-06</td><td>레드마인 패널</td><td>FR-0601~0607</td><td>P2</td></tr>
+          </table>
+          <h2 style="margin-top:26px;">저장 정책</h2>
+          <pre class="terminal" style="background:#070b12;padding:14px;border-radius:8px;">1. 현재 파일을 _archive/&lt;name&gt;_YYYYMMDDhhmmss.md로 복사
+2. &lt;name&gt;.latest.md를 최신 내용으로 갱신</pre>
+        </article>
+      </section>
+      <aside class="panel" style="padding:18px;">
+        <div class="section-title">Frontmatter</div>
+        <table class="table">
+          <tr><td>version</td><td>v0.1</td></tr>
+          <tr><td>last_updated</td><td>2026-06-23</td></tr>
+          <tr><td>author</td><td>PM</td></tr>
+          <tr><td>status</td><td>drafting</td></tr>
+        </table>
+        <div class="section-title" style="margin-top:24px;">아카이브 이력</div>
+        <div class="grid" style="gap:8px;">
+          <div class="pill">AN-40_20260623172011.md</div>
+          <div class="pill">AN-40_20260623154803.md</div>
+          <div class="pill">AN-40_20260623091140.md</div>
+        </div>
+        <div class="section-title" style="margin-top:24px;">Diff 미리보기</div>
+        <div class="terminal panel" style="padding:12px;background:#070b12;">
+          <span style="color:var(--success);">+ Screen-07 설정/환경 추가</span><br>
+          <span style="color:var(--danger);">- cmux 직접 제어 문구 제거</span><br>
+          <span style="color:var(--success);">+ Rust IPC 요구사항 보강</span>
+        </div>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>

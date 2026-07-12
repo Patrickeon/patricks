@@ -347,7 +347,7 @@ watch(
 }
 
 .step-detail-title { color: var(--text-primary); font-weight: 600; margin-bottom: 4px; }
-.step-detail-text  { color: #94a3b8; line-height: 1.5; }
+.step-detail-text  { color: var(--text-muted); line-height: 1.5; }
 
 /* ── 에러 박스 ── */
 .error-box {

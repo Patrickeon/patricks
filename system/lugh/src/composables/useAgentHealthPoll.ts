@@ -1,9 +1,9 @@
 // useAgentHealthPoll — 30초 주기로 에이전트 세션 상태를 폴링한다.
 // WorkspaceView에서 useAgentHealthPoll() 호출 한 번으로 등록.
 import { onMounted, onUnmounted } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
 import { useRoleStore } from '@/stores/role'
-import type { AgentSessionDetail } from '@/ipc/types'
+// #18 fix: DS-60 §3 — invoke 직접 호출 금지, ipc 래퍼 경유
+import { getAgentSession } from '@/ipc/agent'
 
 export function useAgentHealthPoll(intervalMs = 30_000) {
   const roleStore = useRoleStore()
@@ -16,10 +16,7 @@ export function useAgentHealthPoll(intervalMs = 30_000) {
         .filter((s): s is typeof s & { sessionId: string } => s.sessionId !== null)
         .map(async (s) => {
           try {
-            const detail = await invoke<AgentSessionDetail>(
-              'get_agent_session',
-              { sessionId: s.sessionId },
-            )
+            const detail = await getAgentSession(s.sessionId)
             roleStore.applyStatusChanged({ role: s.role, to: detail.state })
           } catch {
             roleStore.applyStatusChanged({ role: s.role, to: 'failed' })

@@ -1,13 +1,28 @@
-<!-- 내장 브라우저 패널 — WebviewWindow 오버레이 방식 (DS-50 §11) -->
+<!-- 브라우저 패널 — [Redmine #17 독립 창 전환] 임베디드 브라우저는 더 이상 main 콘텐츠 영역에
+     좌표 추종하는 child 창이 아니라 독립 최상위 창(타이틀바 있음, OS 드래그로 자유 이동/리사이즈)이다.
+     이 패널은 열기/닫기 토글 + 주소창/뒤로/앞으로 등 네비 컨트롤(기존 위치 그대로 유지) + 상태표시로
+     축소한다. 위치·크기 동기화(ResizeObserver → browser_resize, rAF reposition, 사이드바 리사이즈
+     watch 등)는 전부 제거한다. (DS-60 §3.8/§7 v0.10, DS-40 §9 v0.8) -->
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+// #18 fix: DS-60 §3 — invoke 직접 호출 금지, ipc 래퍼 경유
+import * as browserIpc from '@/ipc/browser'
+import { useWorkspaceStore, toSearchUrl } from '@/stores/workspace'
+
+const workspaceStore = useWorkspaceStore()
+
+// ── 열림 상태 / 현재 주소는 workspaceStore가 소유 ────────────
+// [lifecycle 확정: 계속 띄워두기 후속] 로컬 ref로 두면 사이드바 탭 전환 시 패널이
+// unmount/remount되며 초기화돼 실제 embedded-browser 독립 창 존재 여부와 어긋난다.
+// workspaceStore에 상태를 둬서 패널 재마운트/탭 재진입 시에도 실제 창과 일치시킨다.
+const isOpen = computed(() => workspaceStore.isBrowserOpen)
+const addressValue = computed({
+  get: () => workspaceStore.browserAddress,
+  set: (v: string) => workspaceStore.setBrowserAddress(v),
+})
 
 // ── refs ─────────────────────────────────────────────────────
-const webviewRef    = ref<HTMLElement | null>(null)
-const addressValue  = ref('')
-const isOpen        = ref(false)
 const isLoading     = ref(false)
 const openError     = ref('')
 
@@ -18,36 +33,26 @@ const quickLinks = [
   { icon: '🤖', label: 'Anthropic Docs',url: 'https://docs.anthropic.com/', sub: 'docs.anthropic.com' },
 ]
 
-// ── URL 정규화 ────────────────────────────────────────────────
+// ── URL 정규화 / 검색어 판별 ──────────────────────────────────
+// - http(s):// 로 시작 → 그대로 URL
+// - 공백 포함 or 도트 없는 일반 텍스트 → 검색 엔진 쿼리
+// - 그 외 (예: github.com) → https:// 붙여 URL 취급
 function normalizeUrl(raw: string): string {
   if (!raw) return ''
   if (raw === 'about:blank') return raw
-  if (!/^https?:\/\//i.test(raw)) return `https://${raw}`
-  return raw
+  if (/^https?:\/\//i.test(raw)) return raw
+  // 공백이 있거나 도트가 없으면 검색어로 판단
+  if (/\s/.test(raw) || !raw.includes('.')) return toSearchUrl(raw)
+  return `https://${raw}`
 }
 
-// ── WebviewWindow 위치·크기 계산 ──────────────────────────────
-function getRect(): { x: number; y: number; width: number; height: number } | null {
-  if (!webviewRef.value) return null
-  const r = webviewRef.value.getBoundingClientRect()
-  if (r.width < 1 || r.height < 1) return null
-  return {
-    x:      Math.round(r.left),
-    y:      Math.round(r.top),
-    width:  Math.round(r.width),
-    height: Math.round(r.height),
-  }
-}
-
-// ── 브라우저 열기 ─────────────────────────────────────────────
+// ── 브라우저 열기 (독립 창 생성 — 위치/크기는 백엔드 기본값) ──
 async function openBrowser(url: string) {
-  const rect = getRect()
-  if (!rect) return
   isLoading.value = true
   openError.value = ''
   try {
-    await invoke('browser_open', { url, ...rect })
-    isOpen.value = true
+    await browserIpc.openBrowser(url)
+    workspaceStore.setBrowserOpen(true)
     addressValue.value = url
   } catch (e) {
     openError.value = String(e)
@@ -63,7 +68,7 @@ async function doNavigate(url: string) {
     await openBrowser(url)
   } else {
     try {
-      await invoke('browser_navigate', { url })
+      await browserIpc.navigateBrowser(url)
       addressValue.value = url
     } catch (e) {
       openError.value = String(e)
@@ -86,51 +91,35 @@ async function quickNavigate(url: string) {
 
 // ── 뒤로 / 앞으로 ─────────────────────────────────────────────
 async function goBack() {
-  try { await invoke('browser_back') } catch { /* 커맨드 미구현 시 무시 */ }
+  try { await browserIpc.browserBack() } catch { /* 무시 */ }
 }
 
 async function goForward() {
-  try { await invoke('browser_forward') } catch { /* 커맨드 미구현 시 무시 */ }
+  try { await browserIpc.browserForward() } catch { /* 무시 */ }
 }
 
 // ── 브라우저 닫기 → 홈 화면 복귀 ─────────────────────────────
 async function closeBrowser() {
   if (!isOpen.value) return
-  try { await invoke('browser_close') } catch { /* 무시 */ }
-  isOpen.value = false
+  try { await browserIpc.closeBrowser() } catch { /* 무시 */ }
+  workspaceStore.setBrowserOpen(false)
   addressValue.value = ''
   openError.value = ''
 }
 
-// ── 브라우저 리포지션 ─────────────────────────────────────────
-async function repositionBrowser() {
-  if (!isOpen.value) return
-  const rect = getRect()
-  if (!rect) return
-  try {
-    await invoke('browser_resize', rect)
-  } catch { /* 무시 */ }
-}
-
-// 에러바가 나타나면 webviewRef의 y가 바뀌므로 reposition
-watch(openError, () => {
-  requestAnimationFrame(() => repositionBrowser())
-})
-
 // ── 라이프사이클 ─────────────────────────────────────────────
-let resizeObserver: ResizeObserver | null = null
 let unlistenNavigation: UnlistenFn | null = null
 let isUnmounted = false
 
 onMounted(async () => {
-  // ① webview-placeholder 크기 변화 감지
-  resizeObserver = new ResizeObserver(() => repositionBrowser())
-  if (webviewRef.value) resizeObserver.observe(webviewRef.value)
+  // ① 대기 URL 소비 — openBrowserSearch/openBrowserUrl로 패널이 열린 경우
+  const pending = workspaceStore.consumePendingBrowserUrl()
+  if (pending) {
+    addressValue.value = pending
+    doNavigate(pending)
+  }
 
-  // ② 윈도우 리사이즈 감지
-  window.addEventListener('resize', repositionBrowser)
-
-  // ③ 웹뷰 내 네비게이션 → 주소창 동기화 (박개발 emit 연동)
+  // ② 웹뷰 내 네비게이션 → 주소창 동기화 (독립 창에서도 on_navigation emit 유지)
   const unlisten = await listen<string>('browser:navigation', (e) => {
     addressValue.value = e.payload
   })
@@ -139,23 +128,30 @@ onMounted(async () => {
   else unlistenNavigation = unlisten
 })
 
-onUnmounted(async () => {
+// 패널이 이미 열려 있는 상태에서 openBrowserSearch가 호출된 경우
+watch(() => workspaceStore.pendingBrowserUrl, (url) => {
+  if (!url) return
+  workspaceStore.consumePendingBrowserUrl()
+  addressValue.value = url
+  doNavigate(url)
+})
+
+// [lifecycle 확정: 계속 띄워두기] 독립 창은 패널(사이드바 탭) 언마운트와 수명을 같이하지 않는다.
+// 탭을 브라우저 → 다른 탭으로 전환해도 embedded-browser 창은 계속 떠 있어야 하므로
+// 언마운트 시 closeBrowser()를 호출하지 않는다. 사용자는 브라우저 창 타이틀바의 닫기 버튼
+// 또는 이 패널의 × 버튼(패널이 다시 열렸을 때)으로만 명시적으로 닫는다.
+// main 창 완전 종료 시 동반 정리는 Rust 쪽(commands::browser) 책임.
+onUnmounted(() => {
   isUnmounted = true
-  resizeObserver?.disconnect()
-  window.removeEventListener('resize', repositionBrowser)
   unlistenNavigation?.()
   unlistenNavigation = null
-  if (isOpen.value) {
-    try { await invoke('browser_close') } catch { /* 무시 */ }
-    isOpen.value = false
-  }
 })
 </script>
 
 <template>
   <div class="browser-panel">
 
-    <!-- ── URL 주소창 44px (항상 HTML로 표시) ── -->
+    <!-- ── URL 주소창 44px (항상 HTML로 표시, 기존 위치 그대로 유지) ── -->
     <div class="address-bar">
       <button class="nav-btn" title="뒤로" @click="goBack">‹</button>
       <button class="nav-btn" title="앞으로" @click="goForward">›</button>
@@ -174,16 +170,16 @@ onUnmounted(async () => {
       <button
         v-if="isOpen"
         class="nav-btn close"
-        title="브라우저 닫기 (홈으로)"
+        title="브라우저 닫기"
         @click="closeBrowser"
       >×</button>
     </div>
 
-    <!-- 에러 메시지 (나타나면 webview y 좌표 자동 갱신됨) -->
+    <!-- 에러 메시지 -->
     <div v-if="openError" class="error-bar">⚠️ {{ openError }}</div>
 
-    <!-- ── WebviewWindow이 덮는 영역 ── -->
-    <div ref="webviewRef" class="webview-placeholder">
+    <!-- ── 패널 본문: 열기 전 홈 화면 / 로딩 / 열림 상태표시 ── -->
+    <div class="browser-body">
 
       <!-- 브라우저 미열림 상태: 홈 화면 -->
       <div v-if="!isOpen && !isLoading" class="browser-home">
@@ -210,14 +206,20 @@ onUnmounted(async () => {
         </div>
       </div>
 
-      <!-- 브라우저 로딩 중 -->
+      <!-- 브라우저 여는 중 -->
       <div v-if="isLoading" class="loading-state">
         <span class="spinner" />
-        <span class="loading-text">브라우저 열리는 중…</span>
+        <span class="loading-text">브라우저 창 여는 중…</span>
       </div>
 
-      <!-- 브라우저가 열리면 WebviewWindow가 이 영역을 완전히 덮음 -->
-      <!-- (시각적으로 투명하게 유지) -->
+      <!-- 브라우저가 별도 창으로 열려 있는 상태표시 -->
+      <div v-if="isOpen && !isLoading" class="browser-open-status">
+        <span class="status-icon">🟢</span>
+        <p class="status-title">브라우저가 별도 창에서 열려 있습니다</p>
+        <p class="status-url">{{ addressValue }}</p>
+        <p class="status-hint">창을 자유롭게 이동·크기 조절할 수 있습니다. 위 주소창에서 이동하거나 × 버튼으로 닫으세요.</p>
+      </div>
+
     </div>
 
   </div>
@@ -303,8 +305,8 @@ onUnmounted(async () => {
   flex-shrink: 0;
 }
 
-/* ── WebviewWindow 오버레이 영역 ── */
-.webview-placeholder {
+/* ── 패널 본문 영역 ── */
+.browser-body {
   flex: 1;
   overflow: hidden;
   position: relative;
@@ -394,4 +396,21 @@ onUnmounted(async () => {
   font-size: 13px;
   color: var(--text-muted);
 }
+
+/* ── 열림 상태표시 (독립 창으로 열려 있음을 안내) ── */
+.browser-open-status {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.status-icon  { font-size: 22px; }
+.status-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.status-url   { font-size: 11px; color: var(--text-muted); font-family: monospace; word-break: break-all; }
+.status-hint  { font-size: 11px; color: var(--text-muted); max-width: 320px; line-height: 1.5; }
 </style>

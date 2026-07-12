@@ -133,12 +133,66 @@ export type AgentMessage = {
   is_streaming: boolean
 }
 
+// ── Chat Attachment (#21, DS-60 v0.7 §2.5) ─────────────────
+export type ChatAttachmentKind = 'image' | 'document'
+export type ChatAttachmentSource = 'file_picker' | 'clipboard' | 'drag_drop'
+export type ChatAttachmentStatus = 'pending' | 'ready' | 'failed'
+
+/** frontend → Rust transport (prepare_chat_attachment Request) */
+export type ChatAttachmentInput = {
+  id: string
+  kind: ChatAttachmentKind
+  source: ChatAttachmentSource
+  filename: string
+  media_type: string
+  size_bytes: number
+  content_base64: string
+}
+
+/** prepare_chat_attachment Response — send_agent_message attachments에 그대로 포함 */
+export type PreparedChatAttachment = {
+  id: string
+  kind: ChatAttachmentKind
+  source: ChatAttachmentSource
+  filename: string
+  media_type: string
+  size_bytes: number
+  sha256: string
+  status: ChatAttachmentStatus
+  content_base64?: string
+  extracted_text?: string
+  truncated: boolean
+  error?: AppError
+}
+
+// chat:attachment_prepared / chat:attachment_failed 이벤트 payload (DS-60 §5.2)
+export type ChatAttachmentPrepared = {
+  session_id: string
+  attachment: PreparedChatAttachment
+}
+
+export type ChatAttachmentFailed = {
+  session_id: string
+  attachment_id: string
+  filename: string
+  error: AppError
+}
+
 // ── Persona ────────────────────────────────────────────────
 export type PersonaBundlePreview = {
   role: string
   content_hash: string
   content: string
   source_files: string[]
+}
+
+// ── Web (fetch_url_content, DS-40 v0.5 / DS-60 v0.6) ──────
+// Rust: commands/web.rs FetchedPage
+export type FetchedPage = {
+  url: string          // 실제 요청한 URL (정규화 후)
+  title?: string       // Option<String> — <title> 없으면 null
+  text: string         // 태그 제거·공백 정리된 본문 (최대 50KB)
+  fetched_at: string   // RFC3339
 }
 
 // ── Document ───────────────────────────────────────────────

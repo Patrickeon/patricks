@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>기술 스택 권고 보고서 — AgiTeamBuilder Desktop</title>
+<style>
+:root {
+  --ground: #0C1628;
+  --surface: #152036;
+  --surface-2: #1D2D45;
+  --border: #2A3E58;
+  --text: #E9EEF8;
+  --text-sub: #A8BEDC;
+  --muted: #5C7290;
+  --accent: #E8A528;
+  --accent-2: #4A7FBA;
+  --success: #4CAF7D;
+  --caution: #E06B3C;
+  --rust: #CE6130;
+  --elim-bg: #0F1A2A;
+  --font-display: -apple-system, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+  --font-body: -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html {
+  font-size: 16px;
+  background: var(--ground);
+  color: var(--text);
+  font-family: var(--font-body);
+  line-height: 1.6;
+}
+body {
+  background:
+    linear-gradient(rgba(74,127,186,0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74,127,186,0.035) 1px, transparent 1px),
+    linear-gradient(180deg, #0C1628 0%, #0A1220 100%);
+  background-size: 40px 40px, 40px 40px, 100% 100%;
+  min-height: 100vh;
+}
+.page { max-width: 1020px; margin: 0 auto; padding: 48px 32px 80px; }
+
+/* ── HEADER ── */
+.doc-header { border-bottom: 1px solid var(--border); padding-bottom: 28px; margin-bottom: 40px; }
+.doc-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.doc-designation { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent); }
+.doc-date { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.06em; }
+.doc-title { font-family: var(--font-display); font-size: clamp(22px, 3.2vw, 34px); font-weight: 800; letter-spacing: -0.025em; line-height: 1.15; margin-bottom: 8px; }
+.doc-subtitle { font-size: 14px; color: var(--text-sub); max-width: 700px; margin-bottom: 16px; }
+.source-bar { display: flex; gap: 8px; flex-wrap: wrap; }
+.source-tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; color: var(--muted); background: var(--surface-2); border: 1px solid var(--border); padding: 3px 10px; border-radius: 2px; }
+.source-tag.ok { color: var(--success); background: rgba(76,175,125,0.06); border-color: rgba(76,175,125,0.3); }
+.source-tag.verified { color: var(--accent-2); background: rgba(74,127,186,0.08); border-color: rgba(74,127,186,0.3); }
+
+/* ── ALERT BOX ── */
+.alert-box {
+  display: flex;
+  gap: 14px;
+  background: rgba(206,97,48,0.08);
+  border: 1px solid rgba(206,97,48,0.35);
+  border-left: 3px solid var(--rust);
+  border-radius: 0 4px 4px 0;
+  padding: 16px 18px;
+  margin-bottom: 32px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-sub);
+}
+.alert-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.alert-text strong { color: var(--text); }
+
+/* ── VERDICT BOX ── */
+.verdict-box { position: relative; background: var(--surface); border: 1px solid var(--accent); border-radius: 4px; padding: 28px 32px; margin-bottom: 48px; overflow: hidden; }
+.verdict-box::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--accent) 0%, transparent 60%); }
+.verdict-box::after { content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 280px; background: radial-gradient(ellipse at top right, rgba(232,165,40,0.07) 0%, transparent 65%); pointer-events: none; }
+.verdict-eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+.verdict-headline { font-family: var(--font-display); font-size: clamp(20px, 2.8vw, 30px); font-weight: 800; letter-spacing: -0.025em; margin-bottom: 8px; }
+.verdict-headline em { color: var(--accent); font-style: normal; }
+.verdict-body { font-size: 14px; color: var(--text-sub); max-width: 640px; margin-bottom: 16px; }
+.pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill { font-family: var(--font-mono); font-size: 11px; padding: 4px 12px; border-radius: 2px; letter-spacing: 0.05em; }
+.pill-a { background: rgba(232,165,40,0.13); border: 1px solid rgba(232,165,40,0.38); color: var(--accent); }
+.pill-b { background: rgba(74,127,186,0.1); border: 1px solid rgba(74,127,186,0.3); color: var(--accent-2); }
+.pill-r { background: rgba(206,97,48,0.12); border: 1px solid rgba(206,97,48,0.35); color: #E8895A; }
+
+/* ── SECTION ── */
+.section { margin-bottom: 52px; }
+.sec-hdr { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+.sec-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.sec-rule { flex: 1; height: 1px; background: var(--border); }
+
+/* ── INSTALLER GRID ── */
+.installer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+@media (max-width: 600px) { .installer-grid { grid-template-columns: 1fr; } }
+.installer-card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+.installer-card.primary { border-color: var(--accent); }
+.installer-card.rust-card { border-color: rgba(206,97,48,0.5); background: rgba(206,97,48,0.03); }
+.ins-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.installer-card.primary .ins-header { background: rgba(232,165,40,0.04); border-bottom-color: rgba(232,165,40,0.2); }
+.installer-card.rust-card .ins-header { background: rgba(206,97,48,0.05); }
+.ins-name { font-family: var(--font-display); font-size: 16px; font-weight: 800; letter-spacing: -0.02em; }
+.installer-card.primary .ins-name { color: var(--accent); }
+.installer-card.rust-card .ins-name { color: #E8895A; }
+.ins-badge { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; padding: 3px 8px; border-radius: 2px; }
+.badge-recommended { background: rgba(232,165,40,0.12); color: var(--accent); border: 1px solid rgba(232,165,40,0.28); }
+.badge-alt { background: rgba(206,97,48,0.1); color: #E8895A; border: 1px solid rgba(206,97,48,0.28); }
+.ins-body { padding: 16px 18px; }
+.ins-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.ins-row:last-child { border-bottom: none; }
+.ins-label { color: var(--text-sub); }
+.ins-val { font-family: var(--font-mono); font-size: 11px; }
+.val-green { color: var(--success); }
+.val-amber { color: var(--accent); }
+.val-blue { color: var(--accent-2); }
+.val-rust { color: #E8895A; }
+.val-muted { color: var(--muted); }
+
+/* ── FACT CHECK TABLE ── */
+.fact-list { border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+.fact-row { display: grid; grid-template-columns: auto 1fr 1fr; border-bottom: 1px solid var(--border); }
+.fact-row:last-child { border-bottom: none; }
+.fact-q { padding: 12px 16px; font-size: 13px; font-weight: 600; color: var(--text); border-right: 1px solid var(--border); }
+.fact-electron { padding: 12px 16px; font-size: 13px; color: var(--text-sub); border-right: 1px solid var(--border); background: rgba(232,165,40,0.02); }
+.fact-tauri { padding: 12px 16px; font-size: 13px; color: var(--text-sub); background: rgba(206,97,48,0.02); }
+.fact-row-hdr .fact-q,
+.fact-row-hdr .fact-electron,
+.fact-row-hdr .fact-tauri { padding: 9px 16px; background: var(--surface-2); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.fact-row-hdr .fact-electron { color: var(--accent); }
+.fact-row-hdr .fact-tauri { color: #E8895A; }
+
+/* ── DUAL CANDIDATE ── */
+.dual-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 640px) { .dual-grid { grid-template-columns: 1fr; } }
+.dual-card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 20px; }
+.dual-card.e-card { border-color: var(--accent); }
+.dual-card.t-card { border-color: rgba(206,97,48,0.45); background: rgba(206,97,48,0.02); }
+.dc-eyebrow { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 6px; }
+.dual-card.e-card .dc-eyebrow { color: var(--accent); }
+.dual-card.t-card .dc-eyebrow { color: #E8895A; }
+.dc-name { font-family: var(--font-display); font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 2px; }
+.dual-card.e-card .dc-name { color: var(--accent); }
+.dual-card.t-card .dc-name { color: #E8895A; }
+.dc-stack { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 14px; }
+.criteria { display: flex; flex-direction: column; gap: 5px; }
+.cr-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+.cr-label { color: var(--text-sub); }
+.score { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; padding: 2px 8px; border-radius: 2px; }
+.hi { background: rgba(76,175,125,0.13); color: var(--success); border: 1px solid rgba(76,175,125,0.28); }
+.md { background: rgba(74,127,186,0.1); color: var(--accent-2); border: 1px solid rgba(74,127,186,0.25); }
+.warn { background: rgba(232,165,40,0.1); color: var(--accent); border: 1px solid rgba(232,165,40,0.28); }
+.dc-divider { margin: 12px 0; border: none; border-top: 1px solid var(--border); }
+.dual-card.t-card .dc-divider { border-color: rgba(206,97,48,0.2); }
+.dc-pros, .dc-cons { margin-bottom: 8px; }
+.dc-pros-label, .dc-cons-label { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; margin-bottom: 4px; }
+.dc-pros-label { color: var(--success); }
+.dc-cons-label { color: var(--caution); }
+.dc-list { padding-left: 0; list-style: none; }
+.dc-list li { font-size: 12px; color: var(--text-sub); padding: 2px 0 2px 14px; position: relative; line-height: 1.5; }
+.dc-list li::before { content: '–'; position: absolute; left: 0; color: var(--muted); }
+
+/* ── RUST EXPLANATION ── */
+.rust-explainer { background: rgba(206,97,48,0.04); border: 1px solid rgba(206,97,48,0.3); border-radius: 4px; padding: 20px 22px; margin-bottom: 16px; }
+.re-title { font-family: var(--font-display); font-size: 15px; font-weight: 700; color: #E8895A; margin-bottom: 8px; }
+.re-body { font-size: 13px; color: var(--text-sub); line-height: 1.65; }
+.re-body strong { color: var(--text); }
+.re-note { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(206,97,48,0.2); font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+/* ── COMPARISON TABLE ── */
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 4px; }
+table.cmp { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cmp th, .cmp td { padding: 11px 15px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.cmp th { background: var(--surface-2); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.cmp th.ec { color: var(--accent); background: rgba(232,165,40,0.04); }
+.cmp th.tc { color: #E8895A; background: rgba(206,97,48,0.04); }
+.cmp td { color: var(--text-sub); }
+.cmp td.crit { color: var(--text); font-weight: 600; font-size: 13px; }
+.cmp td.ec { background: rgba(232,165,40,0.02); color: var(--text); }
+.cmp td.tc { background: rgba(206,97,48,0.02); }
+.cmp tr:last-child td { border-bottom: none; }
+
+/* ── DECISION GUIDE ── */
+.decision-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 600px) { .decision-grid { grid-template-columns: 1fr; } }
+.dec-card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 18px 20px; }
+.dec-card.de { border-left: 3px solid var(--accent); }
+.dec-card.dt { border-left: 3px solid #E8895A; }
+.dec-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+.dec-list { padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.dec-list li { font-size: 12px; color: var(--text-sub); padding-left: 14px; position: relative; line-height: 1.5; }
+.dec-list li::before { content: '✓'; position: absolute; left: 0; }
+.dec-card.de .dec-list li::before { color: var(--accent); }
+.dec-card.dt .dec-list li::before { color: #E8895A; }
+
+/* ── MIGRATION MAP ── */
+.mig-list { border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+.mig-row { display: grid; grid-template-columns: 1fr 36px 1fr; border-bottom: 1px solid var(--border); }
+.mig-row:last-child { border-bottom: none; }
+.mig-from { padding: 10px 15px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); background: var(--elim-bg); border-right: 1px solid var(--border); text-decoration: line-through; text-decoration-color: rgba(92,114,144,0.45); line-height: 1.45; }
+.mig-arr { display: flex; align-items: center; justify-content: center; background: var(--surface); border-right: 1px solid var(--border); color: var(--accent-2); font-size: 13px; }
+.mig-to { padding: 10px 15px; font-family: var(--font-mono); font-size: 11px; color: var(--accent-2); background: var(--surface); line-height: 1.45; }
+
+/* ── NEXT STEPS ── */
+.next-box { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+.next-row { display: flex; gap: 14px; align-items: flex-start; padding: 12px 18px; border-bottom: 1px solid var(--border); }
+.next-row:last-child { border-bottom: none; }
+.next-marker { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; color: var(--accent); background: rgba(232,165,40,0.1); border: 1px solid rgba(232,165,40,0.24); padding: 3px 9px; border-radius: 2px; white-space: nowrap; margin-top: 1px; }
+.next-text { font-size: 13px; color: var(--text-sub); line-height: 1.5; }
+.next-text strong { color: var(--text); font-weight: 600; }
+
+/* ── FOOTER ── */
+.doc-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 8px; }
+.footer-note { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.05em; }
+.footer-src { font-family: var(--font-mono); font-size: 9px; color: #2A3E58; letter-spacing: 0.05em; }
+
+/* ── ANIMATIONS ── */
+@keyframes pulse-e { 0% { box-shadow: 0 0 28px rgba(232,165,40,0.07); } 50% { box-shadow: 0 0 44px rgba(232,165,40,0.2); } 100% { box-shadow: 0 0 28px rgba(232,165,40,0.07); } }
+.dual-card.e-card.go { animation: pulse-e 2.8s ease-in-out 0.5s 2; }
+@media (prefers-reduced-motion: reduce) { .dual-card.e-card.go { animation: none; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- HEADER -->
+<header class="doc-header">
+  <div class="doc-meta">
+    <span class="doc-designation">RD020 분析 종합 · v0.2 (검증 갱신)</span>
+    <span class="doc-date">2026-06-22 20:40</span>
+  </div>
+  <h1 class="doc-title">크로스플랫폼 데스크톱 전환<br>기술 스택 권고 — 재검증판</h1>
+  <p class="doc-subtitle">Electron / Tauri(Rust) 두 옵션을 공식 문서 + 실제 벤치마크 기준으로 재검증. Python 불필요. 단일 소스 → 4개 설치 파일 사실관계 확인.</p>
+  <div class="source-bar">
+    <span class="source-tag ok">✓ electron-builder 공식 문서 검증</span>
+    <span class="source-tag ok">✓ Tauri v2.9.6 공식 문서 검증</span>
+    <span class="source-tag verified">🔍 실제 벤치마크 수치 참조</span>
+    <span class="source-tag">PM 종합</span>
+  </div>
+</header>
+
+<!-- ALERT: CORRECTION -->
+<div class="alert-box">
+  <div class="alert-icon">⚠</div>
+  <div class="alert-text">
+    <strong>보정 사항 (v0.1 → v0.2):</strong> 이전 보고서에서 Tauri를 "보조 후보"로 과소평가했습니다. 공식 문서 검증 결과 Tauri v2는 2024년 말 stable 출시 이후 v2.9.6(2025.12)까지 성숙한 프로덕션 프레임워크입니다. 또한 "하나의 소스 → .exe + .msi + .dmg" 는 두 프레임워크 모두 <strong>확인된 사실</strong>이며, <strong>.pkg는 electron-builder에서만 표준 지원</strong>합니다 (Tauri는 .dmg가 macOS 표준). Python은 두 경우 모두 완전히 불필요합니다.
+  </div>
+</div>
+
+<!-- VERDICT: UPDATED -->
+<div class="verdict-box">
+  <div class="verdict-eyebrow">PM 권고 (재검증 후 유지 — 단, Tauri/Rust도 진지한 대안)</div>
+  <div class="verdict-headline"><em>Electron</em> + TypeScript + React</div>
+  <p class="verdict-body">내장 브라우저 패널(WebContentsView)이 핵심 요구사항인 경우 Electron이 완전한 Chromium 환경을 제공합니다. 단, 브라우저 패널이 "웹사이트 열 수 있으면 됨" 수준이라면 <strong>Tauri + Rust</strong>도 동등하게 유효한 선택입니다. 최종 결정은 아래 사실을 보고 오케스트레이터가 합니다.</p>
+  <div class="pill-row">
+    <span class="pill pill-a">TypeScript 언어</span>
+    <span class="pill pill-a">React UI</span>
+    <span class="pill pill-a">Electron 런타임</span>
+    <span class="pill pill-r">대안: Tauri v2 + Rust 백엔드</span>
+  </div>
+</div>
+
+<!-- Q1: 단일 소스 → 설치 파일 -->
+<section class="section">
+  <div class="sec-hdr">
+    <span class="sec-label">Q1 — 하나의 소스로 .exe · .msi · .dmg · .pkg 전부 뽑을 수 있나?</span>
+    <div class="sec-rule"></div>
+  </div>
+
+  <div class="installer-grid">
+    <!-- ELECTRON -->
+    <div class="installer-card primary">
+      <div class="ins-header">
+        <div class="ins-name">Electron</div>
+        <span class="ins-badge badge-recommended">4개 포맷 전부 ✓</span>
+      </div>
+      <div class="ins-body">
+        <div class="ins-row">
+          <span class="ins-label">Windows .exe (NSIS 인스톨러)</span>
+          <span class="ins-val val-green">✓ 공식 지원</span>
+        </div>
+        <div class="ins-row">
+          <span class="ins-label">Windows .msi (WiX)</span>
+          <span class="ins-val val-green">✓ 공식 지원</span>
+        </div>
+        <div class="ins-row">
+          <span class="ins-label">macOS .dmg</span>
+          <span class="ins-val val-green">✓ 공식 지원</span>
+        </div>
+        <div class="ins-row">
+          <span class="ins-label">macOS .pkg</span>
+          <span class="ins-val val-green">✓ 공식 지원</span>
+        </div>
+        <div class="ins-row">
+          <span class="ins-label">Linux (.deb .rpm .AppImage)</span>
+          <span class="ins-val val-blue">✓ 보너스</span>
+        </div>
+        <div class="ins-row">
+          <span class="ins-label">설치 크기</span>
+          <span class="ins-val val-muted">~80 – 150 MB</span>
+        </div>
+        <div class="ins-row">
+          <span class="ins-label">빌드 도구</span>
+          <span class="ins-val val-amber">electron-builder</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAURI -->
+    <div class="installer-card rust-card">
+      <div class="ins-header">
+        <div class="ins-name">Tauri v2</div>
+        <span class="ins-badge badge-alt">3개 포맷 확인 (pkg △)</span>
+      </div>
+      <div class="ins-body">
+        <div class="ins-row">
+          <span class="ins-label">Windows .exe (NSIS 인스톨러)</span>
+          <span class="ins-val val-green">✓ 공식 지원</span>
+        </div>
+        <div class="ins-row">
+          <span class="ins-label">Windows .msi (WiX)</span>
+          <span class="ins-val val-green">✓ 공식 지원</span>
+        </div>
+        <div class="ins-row">
+          <span class="ins-label">macOS .dmg</span>
+          <span class="ins-val val-green">✓ 공식 지원 (표준)</span>
+        </div>
+        <div class="ins-row">
+          <span class="ins-label">macOS .pkg</span>
+          <span class="ins-val val-muted">△ 비표준 (추가 설정)</span>
+        </div>
+        <div class="ins-row">
+          <span class="ins-label">Linux (.deb .rpm .AppImage)</span>
+          <span class="ins-val val-blue">✓ 보너스</span>
+        </div>
+        <div class="ins-row">
+          <span class="ins-label">설치 크기</span>
+          <span class="ins-val val-green">~3 – 10 MB ← 96% 작음</span>
+        </div>
+        <div class="ins-row">
+          <span class="ins-label">빌드 도구</span>
+          <span class="ins-val val-rust">tauri-bundler (Rust)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert-box" style="margin-bottom:0; background: rgba(74,127,186,0.06); border-color: rgba(74,127,186,0.3); border-left-color: var(--accent-2);">
+    <div class="alert-icon" style="font-size:14px;">ℹ</div>
+    <div class="alert-text" style="font-size: 12px;">
+      <strong>참고 — .pkg vs .dmg:</strong> macOS 사용자가 앱을 설치할 때 99%는 <strong>.dmg</strong> (드래그 인스톨)를 사용합니다. .pkg는 기업 배포·시스템 수준 설치(LaunchDaemon 등)에 쓰입니다. 소비자 배포라면 .dmg만으로 충분합니다. <strong>두 프레임워크 모두 단일 소스 코드베이스에서 Windows + macOS 설치 파일을 생성합니다. 단, 플랫폼별로 빌드 머신이 필요합니다</strong> (Windows .exe는 Windows에서, .dmg는 Mac에서 빌드 — 또는 GitHub Actions CI로 자동화).
+    </div>
+  </div>
+</section>
+
+<!-- Q2: RUST / TAURI 설명 -->
+<section class="section">
+  <div class="sec-hdr">
+    <span class="sec-label">Q2 — Rust 로 해도 되지 않나? Tauri 는 뭔가?</span>
+    <div class="sec-rule"></div>
+  </div>
+
+  <div class="rust-explainer">
+    <div class="re-title">Tauri = "Rust 백엔드 + 웹 프론트엔드" 프레임워크</div>
+    <div class="re-body">
+      Tauri는 <strong>Rust로 앱의 핵심 로직(파일 시스템·IPC·프로세스·자격증명·AI API 호출)을 작성</strong>하고, UI는 기존처럼 TypeScript + React(또는 Vue·Svelte)로 작성하는 구조입니다. Rust 코드와 JavaScript 코드가 하나의 앱 안에서 공존합니다.<br><br>
+      현재 시스템(agiteam.sh)의 모든 bash 로직 — config 파싱, 에이전트 부팅, IPC, 파일 읽기 — 이 전부 <strong>Rust로 재작성</strong>되고, 화면(PM 패널·채팅·대시보드)만 TypeScript/React가 담당합니다. <strong>Python은 두 경우 모두 전혀 필요 없습니다.</strong>
+    </div>
+    <div class="re-note">
+      순수 Rust GUI(iced·egui·Slint)도 존재하지만, 이 프로젝트에서 요구하는 "웹 브라우저 패널 내장"은 구현이 어렵거나 불가능합니다. 따라서 Rust를 선택한다면 현실적 선택지는 Tauri입니다.
+    </div>
+  </div>
+
+  <!-- DUAL CANDIDATE -->
+  <div class="dual-grid">
+    <div class="dual-card e-card" id="e-card">
+      <div class="dc-eyebrow">PM 1순위 권고</div>
+      <div class="dc-name">Electron</div>
+      <div class="dc-stack">NODE.JS + CHROMIUM 내장 · TYPESCRIPT</div>
+      <div class="criteria">
+        <div class="cr-row"><span class="cr-label">Win/Mac 완전 동일</span><span class="score hi">100%</span></div>
+        <div class="cr-row"><span class="cr-label">내장 브라우저</span><span class="score hi">완전 Chromium</span></div>
+        <div class="cr-row"><span class="cr-label">설치 크기</span><span class="score warn">~100MB</span></div>
+        <div class="cr-row"><span class="cr-label">RAM 사용</span><span class="score warn">150~300MB</span></div>
+        <div class="cr-row"><span class="cr-label">언어</span><span class="score hi">TypeScript</span></div>
+        <div class="cr-row"><span class="cr-label">성숙도</span><span class="score hi">10년+ 실전</span></div>
+      </div>
+      <hr class="dc-divider">
+      <div class="dc-pros">
+        <div class="dc-pros-label">강점</div>
+        <ul class="dc-list">
+          <li>Chromium 내장 → Win/Mac 브라우저 동작 100% 동일</li>
+          <li>WebContentsView로 탭·세션·쿠키 격리 완전 지원</li>
+          <li>VS Code·Slack·Notion·Figma — 검증된 사례 풍부</li>
+          <li>npm 생태계 최대, Claude SDK 공식 지원</li>
+          <li>.exe .msi .dmg .pkg 전부 표준 지원</li>
+        </ul>
+      </div>
+      <div class="dc-cons">
+        <div class="dc-cons-label">단점</div>
+        <ul class="dc-list">
+          <li>설치 파일 크기 ~100MB+ (Chromium 포함)</li>
+          <li>메모리 사용량 높음 (RAM 150~300MB)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="dual-card t-card">
+      <div class="dc-eyebrow">진지한 대안 — Rust 원하면</div>
+      <div class="dc-name">Tauri v2</div>
+      <div class="dc-stack">RUST 백엔드 + TYPESCRIPT UI · v2.9.6</div>
+      <div class="criteria">
+        <div class="cr-row"><span class="cr-label">Win/Mac 동일</span><span class="score md">99% (미세 차이)</span></div>
+        <div class="cr-row"><span class="cr-label">내장 브라우저</span><span class="score md">WebView 기반</span></div>
+        <div class="cr-row"><span class="cr-label">설치 크기</span><span class="score hi">~3MB ← 96% 작음</span></div>
+        <div class="cr-row"><span class="cr-label">RAM 사용</span><span class="score hi">30~50MB</span></div>
+        <div class="cr-row"><span class="cr-label">언어</span><span class="score hi">Rust + TypeScript</span></div>
+        <div class="cr-row"><span class="cr-label">성숙도</span><span class="score md">v2 stable (2024)</span></div>
+      </div>
+      <hr class="dc-divider">
+      <div class="dc-pros">
+        <div class="dc-pros-label">강점</div>
+        <ul class="dc-list">
+          <li>설치 파일 ~3MB — Electron 대비 96% 작음</li>
+          <li>RAM 50MB 수준 — 메모리 효율 탁월</li>
+          <li>Rust 백엔드 — 성능·보안·타입 안전 최고 수준</li>
+          <li>macOS/iOS/Android 확장 가능 (Tauri v2)</li>
+          <li>Windows WebView2는 Chromium 기반 → Win은 동일</li>
+        </ul>
+      </div>
+      <div class="dc-cons">
+        <div class="dc-cons-label">단점</div>
+        <ul class="dc-list">
+          <li>macOS = WebKit (Safari 엔진) — CSS 미세 차이 가능</li>
+          <li>브라우저 탭 다중 세션 API가 Electron보다 덜 성숙</li>
+          <li>Rust 러닝커브 (현재 팀이 Rust 모른다면)</li>
+          <li>.pkg 비표준 (macOS는 .dmg만)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Q3: Win/Mac 동일 동작 사실 확인 -->
+<section class="section">
+  <div class="sec-hdr">
+    <span class="sec-label">Q3 — Win/Mac 동일 동작 사실 확인</span>
+    <div class="sec-rule"></div>
+  </div>
+
+  <div class="fact-list">
+    <div class="fact-row fact-row-hdr">
+      <div class="fact-q">항목</div>
+      <div class="fact-electron">Electron</div>
+      <div class="fact-tauri">Tauri v2</div>
+    </div>
+    <div class="fact-row">
+      <div class="fact-q">Windows 브라우저 엔진</div>
+      <div class="fact-electron" style="color:var(--success);">Chromium (내장)</div>
+      <div class="fact-tauri" style="color:var(--success);">Edge WebView2 = Chromium 기반 ✓</div>
+    </div>
+    <div class="fact-row">
+      <div class="fact-q">macOS 브라우저 엔진</div>
+      <div class="fact-electron" style="color:var(--success);">Chromium (내장)</div>
+      <div class="fact-tauri" style="color:var(--accent);">WKWebView = WebKit (Safari 엔진) !</div>
+    </div>
+    <div class="fact-row">
+      <div class="fact-q">렌더링 차이 실제 영향</div>
+      <div class="fact-electron" style="color:var(--success);">없음 (동일 엔진)</div>
+      <div class="fact-tauri">실제로는 "exceedingly rare" — 표준 웹사이트 대부분 정상 작동</div>
+    </div>
+    <div class="fact-row">
+      <div class="fact-q">CSS / JS 동작 차이</div>
+      <div class="fact-electron" style="color:var(--success);">없음</div>
+      <div class="fact-tauri">일부 최신 Chrome API 미지원 가능 (예: CSS container queries 일부)</div>
+    </div>
+    <div class="fact-row">
+      <div class="fact-q">외부 웹사이트 탭 열기</div>
+      <div class="fact-electron" style="color:var(--success);">완전 지원</div>
+      <div class="fact-tauri" style="color:var(--success);">완전 지원 (URL 로드 가능)</div>
+    </div>
+    <div class="fact-row">
+      <div class="fact-q">다중 탭 세션 격리</div>
+      <div class="fact-electron" style="color:var(--success);">WebContentsView — 완전 지원</div>
+      <div class="fact-tauri">가능하나 API 덜 성숙</div>
+    </div>
+    <div class="fact-row">
+      <div class="fact-q">Python 사용 여부</div>
+      <div class="fact-electron" style="color:var(--success);">완전 불필요 (TypeScript/Node.js)</div>
+      <div class="fact-tauri" style="color:var(--success);">완전 불필요 (Rust)</div>
+    </div>
+  </div>
+</section>
+
+<!-- DECISION GUIDE -->
+<section class="section">
+  <div class="sec-hdr">
+    <span class="sec-label">어떤 경우에 어떤 선택인가</span>
+    <div class="sec-rule"></div>
+  </div>
+  <div class="decision-grid">
+    <div class="dec-card de">
+      <div class="dec-title">이런 경우 → Electron 선택</div>
+      <ul class="dec-list">
+        <li>브라우저 패널이 "진짜 Chrome"이어야 할 때</li>
+        <li>탭·쿠키·세션 격리를 정밀하게 제어할 때</li>
+        <li>팀이 TypeScript/JavaScript에 익숙할 때</li>
+        <li>macOS/Windows 픽셀 단위 동일 보장이 필요할 때</li>
+        <li>.pkg 배포(기업·엔터프라이즈)가 필요할 때</li>
+      </ul>
+    </div>
+    <div class="dec-card dt">
+      <div class="dec-title">이런 경우 → Tauri + Rust 선택</div>
+      <ul class="dec-list">
+        <li>앱이 가볍고 빠르게 설치돼야 할 때 (~3MB)</li>
+        <li>Rust 역량이 있거나 배울 의지가 있을 때</li>
+        <li>성능·보안을 최우선으로 할 때</li>
+        <li>향후 iOS/Android 확장을 고려할 때</li>
+        <li>브라우저 패널이 "웹사이트 열면 됨" 수준일 때</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- MIGRATION MAP -->
+<section class="section">
+  <div class="sec-hdr">
+    <span class="sec-label">현재 bash → 신규 대체 매핑 (두 선택지 모두)</span>
+    <div class="sec-rule"></div>
+  </div>
+  <div class="mig-list">
+    <div class="mig-row">
+      <div class="mig-from">bash + agiteam.sh</div>
+      <div class="mig-arr">→</div>
+      <div class="mig-to">Electron: TypeScript Orchestrator Service / Tauri: Rust Orchestrator</div>
+    </div>
+    <div class="mig-row">
+      <div class="mig-from">cmux send "메시지"</div>
+      <div class="mig-arr">→</div>
+      <div class="mig-to">AgentSession.send() — AI API 직접 또는 subprocess stdin</div>
+    </div>
+    <div class="mig-row">
+      <div class="mig-from">cmux read-screen (화면 덤프)</div>
+      <div class="mig-arr">→</div>
+      <div class="mig-to">provider stream event / stdout 스트림 구독</div>
+    </div>
+    <div class="mig-row">
+      <div class="mig-from">grep "READY:" 문자열 감지</div>
+      <div class="mig-arr">→</div>
+      <div class="mig-to">lifecycle state: booting → ready (명시적 상태 전이)</div>
+    </div>
+    <div class="mig-row">
+      <div class="mig-from">python3 -c json.load</div>
+      <div class="mig-arr">→</div>
+      <div class="mig-to">TypeScript Zod (Electron) 또는 Rust serde_json (Tauri) — Python 불필요</div>
+    </div>
+    <div class="mig-row">
+      <div class="mig-from">security keychain (macOS 전용)</div>
+      <div class="mig-arr">→</div>
+      <div class="mig-to">OS Credential Vault — Mac Keychain / Win Credential Manager (두 프레임워크 모두)</div>
+    </div>
+    <div class="mig-row">
+      <div class="mig-from">cmux new-split (pane 생성)</div>
+      <div class="mig-arr">→</div>
+      <div class="mig-to">React 패널 레이아웃 + BrowserWindow (Electron) / React 패널 (Tauri)</div>
+    </div>
+  </div>
+</section>
+
+<!-- NEXT STEPS -->
+<section class="section">
+  <div class="sec-hdr">
+    <span class="sec-label">다음 단계 — 오케스트레이터 결정 후</span>
+    <div class="sec-rule"></div>
+  </div>
+  <div class="next-box">
+    <div class="next-row">
+      <span class="next-marker">결정 필요</span>
+      <div class="next-text"><strong>Electron vs Tauri+Rust 선택</strong> — 브라우저 패널 정밀도 요구 수준 + Rust 선호도 기준으로 오케스트레이터 결정. 이 결정이 DS-20·DV-10 방향을 확정합니다.</div>
+    </div>
+    <div class="next-row">
+      <span class="next-marker">DS-20</span>
+      <div class="next-text"><strong>아키텍처 설계서 확정</strong> — 선택된 스택 기반 컴포넌트·IPC·Provider Adapter 설계. 담당: 김아키</div>
+    </div>
+    <div class="next-row">
+      <span class="next-marker">DV-10</span>
+      <div class="next-text"><strong>개발 환경 구성서 갱신</strong> — Node.js+Electron 또는 Rust+Tauri 빌드 환경, CI 패키징 구성. 담당: 김데옵</div>
+    </div>
+    <div class="next-row">
+      <span class="next-marker">AN-40</span>
+      <div class="next-text"><strong>요구사항 명세서</strong> — BE/FE 분析 + 오케스트레이터 요구사항으로 역도출 완성. 담당: PM</div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="doc-footer">
+  <span class="footer-note">electron-builder · Tauri v2 공식 문서 · 2025 벤치마크 검증</span>
+  <span class="footer-note">tos / patricks · v0.2 재검증 · 2026-06-22</span>
+</footer>
+
+</div>
+<script>
+(function () {
+  var mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+  if (mq && mq.matches) return;
+  var card = document.getElementById('e-card');
+  if (card) { setTimeout(function () { card.classList.add('go'); }, 600); }
+}());
+</script>
+</body>
+</html>

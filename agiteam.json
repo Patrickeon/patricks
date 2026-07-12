@@ -1,7 +1,7 @@
 {
   "project": {
-    "name": "tos",
-    "displayName": "tos",
+    "name": "patricks",
+    "displayName": "Patricks AgiTeam",
     "workspace": {
       "name": "AGI개발팀",
       "color": "Indigo"
@@ -29,29 +29,29 @@
     {
       "role": "QA",
       "name": "홍감리",
-      "agent": "codex",
-      "command": "codex --dangerously-bypass-approvals-and-sandbox",
+      "agent": "claude",
+      "command": "claude --dangerously-skip-permissions",
       "layout": "middle_bottom"
     },
     {
       "role": "Architect",
       "name": "김아키",
-      "agent": "codex",
-      "command": "codex --dangerously-bypass-approvals-and-sandbox",
+      "agent": "claude",
+      "command": "claude --dangerously-skip-permissions",
       "layout": "right_top"
     },
     {
       "role": "DevOps",
       "name": "김데옵",
-      "agent": "codex",
-      "command": "codex --dangerously-bypass-approvals-and-sandbox",
+      "agent": "claude",
+      "command": "claude --dangerously-skip-permissions",
       "layout": "right_mid"
     },
     {
       "role": "Designer",
       "name": "장이너",
-      "agent": "codex",
-      "command": "codex --dangerously-bypass-approvals-and-sandbox",
+      "agent": "claude",
+      "command": "claude --dangerously-skip-permissions",
       "layout": "right_bottom"
     }
   ],

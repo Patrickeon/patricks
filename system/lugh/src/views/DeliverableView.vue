@@ -303,7 +303,7 @@ export default {}
   justify-content: space-between;
   padding: 8px 12px;
   border-bottom: 1px solid var(--line-soft);
-  background: rgba(9,13,21,0.5);
+  background: var(--bg-panel-header);
   flex-shrink: 0;
   gap: 8px;
 }
@@ -334,7 +334,7 @@ export default {}
   gap: 6px;
   padding: 6px 12px;
   border-bottom: 1px solid var(--line-soft);
-  background: rgba(8,12,19,0.4);
+  background: var(--bg-panel-2);
   flex-shrink: 0;
 }
 
@@ -370,11 +370,11 @@ export default {}
 :deep(.markdown-body h2) { font-size: 15px; margin: 14px 0 8px; color: var(--text-primary); }
 :deep(.markdown-body h3) { font-size: 13px; margin: 12px 0 6px; color: var(--text-soft); }
 :deep(.markdown-body p)  { margin: 6px 0; color: var(--text-primary); }
-:deep(.markdown-body code) { background: var(--bg-input); padding: 1px 5px; border-radius: 3px; font-size: 12px; color: #5eead4; }
+:deep(.markdown-body code) { background: var(--bg-input); padding: 1px 5px; border-radius: 3px; font-size: 12px; color: var(--primary); }
 :deep(.markdown-body pre) { background: var(--bg-input); padding: 12px; border-radius: 6px; overflow-x: auto; }
 :deep(.markdown-body table) { width: 100%; border-collapse: collapse; margin: 10px 0; }
 :deep(.markdown-body th, .markdown-body td) { padding: 7px 10px; border: 1px solid var(--line-soft); font-size: 12px; }
-:deep(.markdown-body th) { color: var(--text-muted); background: rgba(20,29,43,0.7); }
+:deep(.markdown-body th) { color: var(--text-muted); background: var(--bg-panel-2); }
 
 .archive-bar {
   display: flex;
@@ -383,7 +383,7 @@ export default {}
   padding: 6px 12px;
   border-top: 1px solid var(--line-soft);
   flex-shrink: 0;
-  background: rgba(8,12,19,0.4);
+  background: var(--bg-panel-2);
   overflow-x: auto;
 }
 

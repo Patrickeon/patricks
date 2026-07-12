@@ -12,11 +12,12 @@ use uuid::Uuid;
 use crate::models::{
     error::AppError,
     provider::{
-        AiProviderKind, CredentialRef, HealthStatus, MessageRole, ProviderEvent, ProviderHealth,
-        ProviderMessage, ProviderMessageRequest, ProviderMessageResult, ProviderSessionRef,
-        TokenUsage,
+        AiProviderKind, CredentialRef, HealthStatus, MessageRole, ProviderContentBlock,
+        ProviderEvent, ProviderHealth, ProviderMessage, ProviderMessageRequest,
+        ProviderMessageResult, ProviderSessionRef, TokenUsage,
     },
 };
+use crate::chat_attachment::document_block_text;
 use super::{AiProvider, ProviderEventSink, build_http_client, parse_sse_data};
 
 const ANTHROPIC_API_URL: &str = "https://api.anthropic.com/v1/messages";
@@ -74,6 +75,42 @@ impl ClaudeApiAdapter {
         headers
     }
 
+    /// content_blocks가 있으면 Claude Messages API content block 배열로 변환 (DS-40 §4.3, #21)
+    /// 텍스트 → {type:text}, 이미지 → {type:image, source:{type:base64,...}},
+    /// 문서 → 추출 텍스트를 파일명/미디어 타입 헤더와 함께 text block으로 전달
+    fn message_content(m: &ProviderMessage) -> serde_json::Value {
+        match &m.content_blocks {
+            Some(blocks) if !blocks.is_empty() => {
+                let arr: Vec<serde_json::Value> = blocks
+                    .iter()
+                    .map(|b| match b {
+                        ProviderContentBlock::Text { text } => {
+                            serde_json::json!({ "type": "text", "text": text })
+                        }
+                        ProviderContentBlock::Image { media_type, base64_data, .. } => {
+                            serde_json::json!({
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": media_type,
+                                    "data": base64_data,
+                                }
+                            })
+                        }
+                        ProviderContentBlock::DocumentText {
+                            filename, media_type, extracted_text, ..
+                        } => serde_json::json!({
+                            "type": "text",
+                            "text": document_block_text(filename, media_type, extracted_text),
+                        }),
+                    })
+                    .collect();
+                serde_json::Value::Array(arr)
+            }
+            _ => serde_json::Value::String(m.content.clone()),
+        }
+    }
+
     /// 내부 메시지를 Claude API 형식으로 변환 (DS-40 §4.3)
     fn build_request_body(request: &ProviderMessageRequest, streaming: bool) -> serde_json::Value {
         let messages: Vec<serde_json::Value> = request
@@ -86,7 +123,7 @@ impl ClaudeApiAdapter {
                         MessageRole::Assistant => "assistant",
                         MessageRole::System => "user", // Claude는 system 메시지를 top-level로 처리
                     },
-                    "content": m.content,
+                    "content": Self::message_content(m),
                 })
             })
             .collect();
@@ -357,7 +394,9 @@ mod tests {
             messages: vec![ProviderMessage {
                 role: MessageRole::User,
                 content: "Hello".into(),
+                content_blocks: None,
             }],
+            attachments: vec![],
             temperature: None,
             max_tokens: Some(1024),
             tools: vec![],
@@ -366,6 +405,55 @@ mod tests {
         assert_eq!(body["model"], "claude-3-5-sonnet-latest");
         assert_eq!(body["stream"], true);
         assert_eq!(body["max_tokens"], 1024);
+        // content_blocks 없으면 기존 문자열 content 유지 (하위 호환)
+        assert_eq!(body["messages"][0]["content"], "Hello");
+    }
+
+    #[test]
+    fn test_build_request_body_with_content_blocks() {
+        // #21: 이미지 base64 content block + 문서 추출 텍스트 변환 (DS-40 §4.4)
+        let req = ProviderMessageRequest {
+            session_id: "s1".into(),
+            provider: AiProviderKind::Claude,
+            model: "claude-3-5-sonnet-latest".into(),
+            system_prompt: "system".into(),
+            messages: vec![ProviderMessage {
+                role: MessageRole::User,
+                content: "이미지를 검토해 주세요.".into(),
+                content_blocks: Some(vec![
+                    ProviderContentBlock::Text { text: "이미지를 검토해 주세요.".into() },
+                    ProviderContentBlock::Image {
+                        attachment_id: "att-1".into(),
+                        media_type: "image/png".into(),
+                        base64_data: "iVBORw0KGgo=".into(),
+                    },
+                    ProviderContentBlock::DocumentText {
+                        attachment_id: "att-2".into(),
+                        filename: "요구사항.md".into(),
+                        media_type: "text/markdown".into(),
+                        extracted_text: "본문".into(),
+                        truncated: false,
+                    },
+                ]),
+            }],
+            attachments: vec![],
+            temperature: None,
+            max_tokens: Some(1024),
+            tools: vec![],
+        };
+        let body = ClaudeApiAdapter::build_request_body(&req, true);
+        let content = &body["messages"][0]["content"];
+        assert!(content.is_array());
+        assert_eq!(content[0]["type"], "text");
+        assert_eq!(content[1]["type"], "image");
+        assert_eq!(content[1]["source"]["type"], "base64");
+        assert_eq!(content[1]["source"]["media_type"], "image/png");
+        assert_eq!(content[1]["source"]["data"], "iVBORw0KGgo=");
+        assert_eq!(content[2]["type"], "text");
+        assert_eq!(
+            content[2]["text"],
+            "[첨부 문서: 요구사항.md, text/markdown]\n본문"
+        );
     }
 
     #[test]
@@ -376,6 +464,7 @@ mod tests {
             model: "claude-3-5-sonnet-latest".into(),
             system_prompt: "system".into(),
             messages: vec![],
+            attachments: vec![],
             temperature: Some(0.5),
             max_tokens: None,
             tools: vec![ToolDefinition {

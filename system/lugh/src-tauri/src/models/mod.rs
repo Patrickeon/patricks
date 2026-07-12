@@ -1,5 +1,6 @@
 // models/mod.rs — 모델 모듈 재export
 
+pub mod attachment;
 pub mod error;
 pub mod message;
 pub mod persona;

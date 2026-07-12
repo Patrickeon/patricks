@@ -4,6 +4,8 @@ import { ref, computed, nextTick, watch } from 'vue'
 import { useRoleStore } from '@/stores/role'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { sendAgentMessage } from '@/ipc/agent'
+import { useChatAttachments } from '@/composables/useChatAttachments'
+import AttachmentChips from '@/components/AttachmentChips.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import type { AgentLifecycleState } from '@/ipc/types'
 
@@ -29,6 +31,7 @@ const workspaceStore = useWorkspaceStore()
 
 const draftMessage = ref('')
 const chatLogEl = ref<HTMLDivElement | null>(null)
+const fileInputEl = ref<HTMLInputElement | null>(null)
 const isSending = ref(false)
 
 // ── 세션 ──────────────────────────────────────────────────
@@ -37,9 +40,16 @@ const status = computed<AgentLifecycleState>(() => session.value?.status ?? 'idl
 const messages = computed(() => session.value?.messages ?? [])
 const isMaximized = computed(() => workspaceStore.maximizedRole === props.role)
 
-// ── 버튼 활성화 규칙 (DS-60 §5.2) ────────────────────────
+// ── 첨부 (#21: 파일 선택·클립보드 붙여넣기·드래그&드롭) ────
+const attachments = useChatAttachments(() => session.value?.sessionId ?? undefined)
+
+// ── 버튼 활성화 규칙 (DS-60 §5.2 + #21 첨부) ─────────────
+// 텍스트 또는 ready 첨부가 있어야 전송 가능 (pending 중에는 대기)
 const canSend = computed(() =>
-  status.value === 'ready' && !!draftMessage.value.trim() && !isSending.value,
+  status.value === 'ready' &&
+  !isSending.value &&
+  !attachments.hasPending.value &&
+  (!!draftMessage.value.trim() || attachments.readyAttachments.value.length > 0),
 )
 
 // ── 자동 스크롤 ───────────────────────────────────────────
@@ -52,16 +62,19 @@ watch(messages, async () => {
 async function sendMessage() {
   if (!canSend.value) return
   const content = draftMessage.value.trim()
+  const readyAtts = attachments.readyAttachments.value
   const sessionId = session.value?.sessionId
   if (!sessionId) return
 
   isSending.value = true
   draftMessage.value = ''
   try {
-    const ack = await sendAgentMessage(sessionId, content)
+    // #21: failed 칩은 payload에서 제외 — ready 첨부만 전달 (DS-60 §4.1)
+    const ack = await sendAgentMessage(sessionId, content, readyAtts)
     roleStore.addUserMessage(props.role, content, ack.user_message_id)
+    attachments.clear() // 전송 성공 시에만 첨부 초기화
   } catch (e) {
-    draftMessage.value = content
+    draftMessage.value = content // 실패 시 복원 (첨부 칩은 유지)
   } finally {
     isSending.value = false
   }
@@ -133,16 +146,43 @@ function agentLabel(a: string) {
       </div>
     </div>
 
-    <!-- 입력 -->
-    <div class="input-row">
-      <input
-        v-model="draftMessage"
-        class="msg-input"
-        :placeholder="status === 'ready' ? '메시지 입력 (Enter 전송)' : status.toUpperCase()"
-        :disabled="status !== 'ready' || isSending"
-        @keydown="onKeydown"
-      />
-      <button class="send-btn" :disabled="!canSend" @click="sendMessage">→</button>
+    <!-- 입력 (#21: drop zone — 파일 드래그&드롭 첨부) -->
+    <div
+      class="input-zone"
+      :class="{ 'drag-over': attachments.isDragOver.value }"
+      @dragover="attachments.onDragOver"
+      @dragleave="attachments.onDragLeave"
+      @drop="attachments.onDrop"
+    >
+      <!-- 첨부 미리보기 칩 -->
+      <AttachmentChips :chips="attachments.chips.value" @remove="attachments.removeChip" />
+
+      <div class="input-row">
+        <!-- #21: 첨부 버튼 → 숨김 file input (OS 파일 선택 다이얼로그) -->
+        <input
+          ref="fileInputEl"
+          type="file"
+          multiple
+          class="file-input-hidden"
+          accept="image/png,image/jpeg,image/webp,image/gif,.md,.markdown,.txt,.csv,.json,.yaml,.yml,.log,.pdf"
+          @change="attachments.onFileInputChange"
+        />
+        <button
+          class="attach-btn"
+          title="이미지·문서 첨부"
+          :disabled="status !== 'ready'"
+          @click="fileInputEl?.click()"
+        >📎</button>
+        <input
+          v-model="draftMessage"
+          class="msg-input"
+          :placeholder="status === 'ready' ? '메시지 입력 (Enter 전송)' : status.toUpperCase()"
+          :disabled="status !== 'ready' || isSending"
+          @keydown="onKeydown"
+          @paste="attachments.onPaste"
+        />
+        <button class="send-btn" :disabled="!canSend" @click="sendMessage">→</button>
+      </div>
     </div>
   </div>
 </template>
@@ -313,13 +353,45 @@ function agentLabel(a: string) {
 }
 
 /* ── 입력 ── */
+.input-zone {
+  border-top: 1px solid var(--line-soft);
+  flex-shrink: 0;
+  padding: 0 8px;
+  transition: background 0.12s, outline 0.12s;
+}
+
+/* #21: 드래그&드롭 hover 상태 */
+.input-zone.drag-over {
+  background: var(--accent-soft, rgba(99,102,241,0.08));
+  outline: 2px dashed var(--accent);
+  outline-offset: -3px;
+}
+
 .input-row {
   display: flex;
   gap: 4px;
-  padding: 6px 8px;
-  border-top: 1px solid var(--line-soft);
-  flex-shrink: 0;
+  padding: 6px 0;
+  align-items: center;
 }
+
+.file-input-hidden { display: none; }
+
+.attach-btn {
+  width: 28px; height: 28px;
+  border: 1px solid var(--line);
+  background: var(--bg-panel-2);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  transition: all 0.12s;
+  padding: 0;
+}
+
+.attach-btn:hover:not(:disabled) { border-color: var(--role-accent, var(--accent)); }
+.attach-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .msg-input {
   flex: 1;

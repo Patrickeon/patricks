@@ -1,0 +1,49 @@
+version: '3.8'
+
+# AgiTeamBuilder — Redmine 이슈 트래커 (로컬 Docker)
+# URL: http://localhost:3000
+# 초기 관리자: admin / admin (최초 로그인 후 변경 필요)
+
+services:
+  redmine-db:
+    image: mariadb:10.11
+    container_name: lugh-redmine-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: redmine_root
+      MYSQL_DATABASE: redmine
+      MYSQL_USER: redmine
+      MYSQL_PASSWORD: redmine123
+    volumes:
+      - redmine-db-data:/var/lib/mysql
+    networks:
+      - redmine-net
+
+  redmine:
+    image: redmine:5.1
+    container_name: lugh-redmine
+    restart: unless-stopped
+    depends_on:
+      - redmine-db
+    ports:
+      - "3000:3000"
+    environment:
+      REDMINE_DB_MYSQL: redmine-db
+      REDMINE_DB_DATABASE: redmine
+      REDMINE_DB_USERNAME: redmine
+      REDMINE_DB_PASSWORD: redmine123
+      REDMINE_SECRET_KEY_BASE: lugh_agiteam_secret_key_base_2026
+    volumes:
+      - redmine-files:/usr/src/redmine/files
+      - redmine-plugins:/usr/src/redmine/plugins
+    networks:
+      - redmine-net
+
+networks:
+  redmine-net:
+    driver: bridge
+
+volumes:
+  redmine-db-data:
+  redmine-files:
+  redmine-plugins:

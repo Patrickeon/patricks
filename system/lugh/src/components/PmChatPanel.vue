@@ -8,6 +8,8 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useDeliverableStore } from '@/stores/deliverable'
 import { sendAgentMessage } from '@/ipc/agent'
 import { readDocument } from '@/ipc/document'
+import { useChatAttachments } from '@/composables/useChatAttachments'
+import AttachmentChips from '@/components/AttachmentChips.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import type { AgentLifecycleState } from '@/ipc/types'
 
@@ -19,12 +21,24 @@ const deliverableStore = useDeliverableStore()
 
 const draftMessage = ref('')
 const chatLogEl = ref<HTMLDivElement | null>(null)
+const fileInputEl = ref<HTMLInputElement | null>(null)
 const isSending = ref(false)
 
 // ── PM 세션 ───────────────────────────────────────────────
 const pmSession = computed(() => roleStore.getSession('PM'))
 const pmStatus = computed<AgentLifecycleState>(() => pmSession.value?.status ?? 'idle')
 const messages = computed(() => pmSession.value?.messages ?? [])
+
+// ── 첨부 (#21: 파일 선택·클립보드 붙여넣기·드래그&드롭) ────
+const attachments = useChatAttachments(() => pmSession.value?.sessionId ?? undefined)
+
+// 텍스트 또는 ready 첨부가 있어야 전송 가능 (pending 중에는 대기)
+const canSend = computed(() =>
+  pmStatus.value === 'ready' &&
+  !isSending.value &&
+  !attachments.hasPending.value &&
+  (!!draftMessage.value.trim() || attachments.readyAttachments.value.length > 0),
+)
 
 // ── 자동 스크롤 ───────────────────────────────────────────
 watch(messages, async () => {
@@ -36,9 +50,9 @@ watch(messages, async () => {
 
 // ── 메시지 전송 ───────────────────────────────────────────
 async function sendMessage() {
+  if (!canSend.value) return
   const content = draftMessage.value.trim()
-  if (!content || isSending.value) return
-  if (pmStatus.value !== 'ready') return
+  const readyAtts = attachments.readyAttachments.value
 
   const sessionId = pmSession.value?.sessionId
   if (!sessionId) return
@@ -46,10 +60,12 @@ async function sendMessage() {
   isSending.value = true
   draftMessage.value = ''
   try {
-    const ack = await sendAgentMessage(sessionId, content)
+    // #21: failed 칩은 payload에서 제외 — ready 첨부만 전달 (DS-60 §4.1)
+    const ack = await sendAgentMessage(sessionId, content, readyAtts)
     roleStore.addUserMessage('PM', content, ack.user_message_id)
+    attachments.clear() // 전송 성공 시에만 첨부 초기화
   } catch (e) {
-    draftMessage.value = content // 실패 시 복원
+    draftMessage.value = content // 실패 시 복원 (첨부 칩은 유지)
     console.error('PM 메시지 전송 실패', e)
   } finally {
     isSending.value = false
@@ -137,21 +153,48 @@ function isStreamingMsg(msgId: string) {
       </button>
     </div>
 
-    <!-- 입력 영역 -->
-    <div class="input-area">
+    <!-- 입력 영역 (#21: drop zone — 파일 드래그&드롭 첨부) -->
+    <div
+      class="input-area"
+      :class="{ 'drag-over': attachments.isDragOver.value }"
+      @dragover="attachments.onDragOver"
+      @dragleave="attachments.onDragLeave"
+      @drop="attachments.onDrop"
+    >
+      <!-- 첨부 미리보기 칩 -->
+      <AttachmentChips :chips="attachments.chips.value" @remove="attachments.removeChip" />
+
       <textarea
         v-model="draftMessage"
         class="msg-input"
-        placeholder="메시지 입력 (Ctrl+Enter 전송)"
+        placeholder="메시지 입력 (Ctrl+Enter 전송, 이미지·문서 붙여넣기 가능)"
         rows="3"
         :disabled="pmStatus !== 'ready' || isSending"
         @keydown="onKeydown"
+        @paste="attachments.onPaste"
       />
       <div class="input-footer">
-        <span class="hint">Ctrl+Enter 전송</span>
+        <div class="footer-left">
+          <!-- #21: 첨부 버튼 → 숨김 file input (OS 파일 선택 다이얼로그) -->
+          <input
+            ref="fileInputEl"
+            type="file"
+            multiple
+            class="file-input-hidden"
+            accept="image/png,image/jpeg,image/webp,image/gif,.md,.markdown,.txt,.csv,.json,.yaml,.yml,.log,.pdf"
+            @change="attachments.onFileInputChange"
+          />
+          <button
+            class="attach-btn"
+            title="이미지·문서 첨부"
+            :disabled="pmStatus !== 'ready'"
+            @click="fileInputEl?.click()"
+          >📎</button>
+          <span class="hint">Ctrl+Enter 전송</span>
+        </div>
         <button
           class="send-btn"
-          :disabled="!draftMessage.trim() || pmStatus !== 'ready' || isSending"
+          :disabled="!canSend"
           @click="sendMessage"
         >
           {{ isSending ? '전송 중…' : '전송' }}
@@ -333,7 +376,35 @@ function isStreamingMsg(msgId: string) {
   flex-direction: column;
   gap: 6px;
   flex-shrink: 0;
+  transition: background 0.12s, outline 0.12s;
 }
+
+/* #21: 드래그&드롭 hover 상태 */
+.input-area.drag-over {
+  background: var(--accent-soft, rgba(99,102,241,0.08));
+  outline: 2px dashed var(--accent);
+  outline-offset: -4px;
+}
+
+.footer-left { display: flex; align-items: center; gap: 8px; }
+
+.file-input-hidden { display: none; }
+
+.attach-btn {
+  width: 26px; height: 26px;
+  border: 1px solid var(--line);
+  background: var(--bg-panel-2);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  display: grid;
+  place-items: center;
+  transition: all 0.12s;
+  padding: 0;
+}
+
+.attach-btn:hover:not(:disabled) { border-color: var(--accent); }
+.attach-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .msg-input {
   width: 100%;

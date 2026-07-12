@@ -11,11 +11,13 @@ use tokio::process::Command;
 use uuid::Uuid;
 use std::process::Stdio;
 
+use crate::chat_attachment::document_block_text;
 use crate::models::{
     error::AppError,
     provider::{
-        AiProviderKind, CredentialRef, HealthStatus, ProviderEvent, ProviderHealth,
-        ProviderMessageRequest, ProviderMessageResult, ProviderSessionRef, MessageRole,
+        AiProviderKind, CredentialRef, HealthStatus, ProviderContentBlock, ProviderEvent,
+        ProviderHealth, ProviderMessage, ProviderMessageRequest, ProviderMessageResult,
+        ProviderSessionRef, MessageRole,
     },
 };
 use super::{AiProvider, ProviderEventSink};
@@ -34,6 +36,33 @@ impl ClaudeCliAdapter {
         Self
     }
 
+    /// CLI 전송용 메시지 텍스트 구성 (#21, DS-40 §7.3)
+    /// CLI 경로는 이미지 미지원(supports_vision=false, 전송 전 거절됨) —
+    /// 문서 첨부는 추출 텍스트만 프롬프트에 병합한다. 이미지 block은 조용히 누락하지 않고
+    /// 방어적으로 도달 시 파일명 표기만 남긴다 (정상 흐름에서는 도달 불가).
+    fn message_text(msg: &ProviderMessage) -> String {
+        match &msg.content_blocks {
+            Some(blocks) if !blocks.is_empty() => {
+                let mut parts: Vec<String> = Vec::with_capacity(blocks.len());
+                for block in blocks {
+                    match block {
+                        ProviderContentBlock::Text { text } => parts.push(text.clone()),
+                        ProviderContentBlock::DocumentText {
+                            filename, media_type, extracted_text, ..
+                        } => parts.push(document_block_text(filename, media_type, extracted_text)),
+                        ProviderContentBlock::Image { .. } => {
+                            // 이미지 미지원 — send_message 단계에서 ATTACHMENT_UNSUPPORTED로
+                            // 거절되므로 정상 흐름에서는 도달하지 않는다
+                            parts.push("[이미지 첨부: CLI provider 미지원]".to_string());
+                        }
+                    }
+                }
+                parts.join("\n\n")
+            }
+            _ => msg.content.clone(),
+        }
+    }
+
     /// stream-json stdin 입력 문자열 생성 (멀티턴 대화 히스토리 포함)
     fn build_stdin(request: &ProviderMessageRequest) -> String {
         let mut buf = String::new();
@@ -47,7 +76,7 @@ impl ClaudeCliAdapter {
                 "type": role_str,
                 "message": {
                     "role": role_str,
-                    "content": msg.content
+                    "content": Self::message_text(msg)
                 }
             });
             buf.push_str(&line.to_string());
@@ -59,6 +88,12 @@ impl ClaudeCliAdapter {
 
 #[async_trait]
 impl AiProvider for ClaudeCliAdapter {
+    /// Claude CLI shell provider는 MVP에서 이미지 첨부 미지원 (DS-40 §7.3)
+    /// 이미지 첨부가 있으면 전송 전 ATTACHMENT_UNSUPPORTED로 거절된다.
+    fn supports_vision(&self) -> bool {
+        false
+    }
+
     async fn validate_credential(&self, _credential: CredentialRef) -> Result<ProviderHealth, AppError> {
         // CLI 경로에서는 credential 검증 불필요 — claude CLI 자체 auth 사용
         Ok(ProviderHealth {
@@ -209,5 +244,67 @@ impl AiProvider for ClaudeCliAdapter {
             content: full_content,
             usage: None,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::provider::AiProviderKind;
+
+    fn base_request(messages: Vec<ProviderMessage>) -> ProviderMessageRequest {
+        ProviderMessageRequest {
+            session_id: "s1".into(),
+            provider: AiProviderKind::Claude,
+            model: "claude-sonnet-4-5-20250929".into(),
+            system_prompt: "system".into(),
+            messages,
+            attachments: vec![],
+            temperature: None,
+            max_tokens: None,
+            tools: vec![],
+        }
+    }
+
+    #[test]
+    fn test_supports_vision_false() {
+        // #21: CLI shell provider는 이미지 미지원 (DS-40 §7.3)
+        let adapter = ClaudeCliAdapter::new();
+        assert!(!adapter.supports_vision());
+    }
+
+    #[test]
+    fn test_build_stdin_plain_text_backward_compat() {
+        let req = base_request(vec![ProviderMessage {
+            role: MessageRole::User,
+            content: "안녕".into(),
+            content_blocks: None,
+        }]);
+        let stdin = ClaudeCliAdapter::build_stdin(&req);
+        assert!(stdin.contains("안녕"));
+        assert!(stdin.contains("\"role\":\"user\""));
+    }
+
+    #[test]
+    fn test_build_stdin_merges_document_text_into_prompt() {
+        // #21: 문서 첨부는 추출 텍스트만 프롬프트에 병합 (DS-40 §7.3)
+        let req = base_request(vec![ProviderMessage {
+            role: MessageRole::User,
+            content: "검토 부탁".into(),
+            content_blocks: Some(vec![
+                ProviderContentBlock::Text { text: "검토 부탁".into() },
+                ProviderContentBlock::DocumentText {
+                    attachment_id: "att-1".into(),
+                    filename: "spec.md".into(),
+                    media_type: "text/markdown".into(),
+                    extracted_text: "# 명세 내용".into(),
+                    truncated: false,
+                },
+            ]),
+        }]);
+        let stdin = ClaudeCliAdapter::build_stdin(&req);
+        assert!(stdin.contains("검토 부탁"));
+        assert!(stdin.contains("[첨부 문서: spec.md, text/markdown]"));
+        assert!(stdin.contains("# 명세 내용"));
     }
 }

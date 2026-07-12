@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DS-55 시안 Screen-07 설정 환경</title>
+  <link rel="stylesheet" href="./DS-55_mockup.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand"><div class="mark">A</div><div>설정 / 환경</div><span class="pill">Credentials · project_state · doctor</span></div>
+      <div class="nav"><button class="btn">진단 실행</button><button class="btn primary">저장</button></div>
+    </header>
+    <section class="page" style="display:grid;grid-template-columns:410px 1fr 360px;gap:18px;">
+      <aside class="panel" style="padding:18px;">
+        <div class="section-title">에이전트 로그인 상태</div>
+        <div class="grid" style="gap:10px;">
+          <div class="panel" style="padding:14px;"><div class="between"><h3>Claude Code</h3><span class="badge ok">인증됨</span></div><p style="margin-top:8px;">macOS Keychain / Credential Manager</p></div>
+          <div class="panel" style="padding:14px;"><div class="between"><h3>Codex</h3><span class="badge ok">인증됨</span></div><p style="margin-top:8px;">login status 확인 완료</p></div>
+          <div class="panel" style="padding:14px;"><div class="between"><h3>Gemini</h3><span class="badge err">미인증</span></div><button class="btn" style="margin-top:12px;width:100%;">재로그인</button></div>
+        </div>
+        <div class="section-title" style="margin-top:26px;">API 연결 테스트</div>
+        <div class="grid" style="grid-template-columns:1fr 1fr;">
+          <div class="panel" style="padding:12px;"><span class="badge ok">Anthropic OK</span><p style="margin-top:8px;">84ms</p></div>
+          <div class="panel" style="padding:12px;"><span class="badge ok">OpenAI OK</span><p style="margin-top:8px;">92ms</p></div>
+        </div>
+      </aside>
+      <section class="panel" style="padding:18px;">
+        <div class="between"><div><h2>project_state.yaml</h2><p>스칼라와 milestones 리스트를 GUI로 편집합니다.</p></div><span class="badge info">YAML valid</span></div>
+        <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:16px;">
+          <div><label class="label">business_type</label><input class="input" value="desktop_gui"></div>
+          <div><label class="label">current_mode</label><input class="input" value="development"></div>
+          <div><label class="label">milestone</label><input class="input" value="VIS"></div>
+          <div><label class="label">wbs_track</label><input class="input" value="A"></div>
+        </div>
+        <div class="section-title" style="margin-top:24px;">Milestones</div>
+        <table class="table">
+          <tr><th>단계</th><th>상태</th><th>담당</th><th>일자</th></tr>
+          <tr><td>RD020 현황분석</td><td><span class="badge ok">완료</span></td><td>FE/BE</td><td>2026-06-22</td></tr>
+          <tr><td>AN-40 요구사항</td><td><span class="badge ok">초안</span></td><td>PM</td><td>2026-06-23</td></tr>
+          <tr><td>DS-55 디자인시안</td><td><span class="badge busy">진행</span></td><td>Designer</td><td>2026-06-23</td></tr>
+        </table>
+        <div class="section-title" style="margin-top:24px;">YAML 원문 미리보기</div>
+        <pre class="terminal panel" style="padding:14px;background:#070b12;height:180px;">business_type: desktop_gui
+current_mode: development
+milestone: VIS
+wbs_track: A
+milestones:
+  - id: RD020
+    status: done
+  - id: DS-55
+    status: in_progress</pre>
+      </section>
+      <aside class="panel" style="padding:18px;">
+        <div class="section-title">레드마인</div>
+        <label class="label">Server URL</label><input class="input" value="http://211.117.60.5:8080/">
+        <label class="label" style="margin-top:14px;">PM API Key</label><input class="input" value="••••••••••••••••">
+        <label class="label" style="margin-top:14px;">Designer API Key</label><input class="input" value="••••••••••••••••">
+        <button class="btn" style="width:100%;margin-top:12px;">연결 테스트</button>
+        <div class="section-title" style="margin-top:26px;">Doctor</div>
+        <table class="table">
+          <tr><td>git</td><td><span class="badge ok">found</span></td></tr>
+          <tr><td>claude</td><td><span class="badge ok">found</span></td></tr>
+          <tr><td>codex</td><td><span class="badge ok">found</span></td></tr>
+          <tr><td>gemini</td><td><span class="badge err">login required</span></td></tr>
+          <tr><td>WebView2</td><td><span class="badge ok">ready</span></td></tr>
+        </table>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>

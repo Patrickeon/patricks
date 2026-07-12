@@ -7,4 +7,5 @@ pub mod document;
 pub mod health;
 pub mod persona;
 pub mod redmine;
+pub mod web;
 pub mod workspace;

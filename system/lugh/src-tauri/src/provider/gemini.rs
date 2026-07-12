@@ -12,11 +12,12 @@ use uuid::Uuid;
 use crate::models::{
     error::AppError,
     provider::{
-        AiProviderKind, CredentialRef, HealthStatus, MessageRole, ProviderEvent, ProviderHealth,
-        ProviderMessage, ProviderMessageRequest, ProviderMessageResult, ProviderSessionRef,
-        TokenUsage,
+        AiProviderKind, CredentialRef, HealthStatus, MessageRole, ProviderContentBlock,
+        ProviderEvent, ProviderHealth, ProviderMessage, ProviderMessageRequest,
+        ProviderMessageResult, ProviderSessionRef, TokenUsage,
     },
 };
+use crate::chat_attachment::document_block_text;
 use super::{AiProvider, ProviderEventSink, build_http_client};
 
 const GEMINI_BASE_URL: &str = "https://generativelanguage.googleapis.com";
@@ -54,6 +55,38 @@ impl GeminiApiAdapter {
         headers
     }
 
+    /// content_blocks가 있으면 contents[].parts[]로 변환 (DS-40 §6.3, #21)
+    /// 텍스트/문서 추출 결과 → { text }, 이미지 → { inlineData: { mimeType, data } }
+    fn message_parts(m: &ProviderMessage) -> serde_json::Value {
+        match &m.content_blocks {
+            Some(blocks) if !blocks.is_empty() => {
+                let parts: Vec<serde_json::Value> = blocks
+                    .iter()
+                    .map(|b| match b {
+                        ProviderContentBlock::Text { text } => {
+                            serde_json::json!({ "text": text })
+                        }
+                        ProviderContentBlock::Image { media_type, base64_data, .. } => {
+                            serde_json::json!({
+                                "inlineData": {
+                                    "mimeType": media_type,
+                                    "data": base64_data,
+                                }
+                            })
+                        }
+                        ProviderContentBlock::DocumentText {
+                            filename, media_type, extracted_text, ..
+                        } => serde_json::json!({
+                            "text": document_block_text(filename, media_type, extracted_text),
+                        }),
+                    })
+                    .collect();
+                serde_json::Value::Array(parts)
+            }
+            _ => serde_json::json!([{ "text": m.content }]),
+        }
+    }
+
     /// 내부 메시지를 Gemini API 형식으로 변환 (DS-40 §6.3)
     fn build_request_body(request: &ProviderMessageRequest) -> serde_json::Value {
         // system message는 별도 필드로 분리
@@ -72,7 +105,7 @@ impl GeminiApiAdapter {
                         MessageRole::Assistant => "model",
                         MessageRole::System => "user",
                     },
-                    "parts": [{ "text": m.content }],
+                    "parts": Self::message_parts(m),
                 })
             })
             .collect();
@@ -355,7 +388,9 @@ mod tests {
             messages: vec![ProviderMessage {
                 role: MessageRole::User,
                 content: "안녕".into(),
+                content_blocks: None,
             }],
+            attachments: vec![],
             temperature: Some(0.2),
             max_tokens: Some(4096),
             tools: vec![],
@@ -364,6 +399,47 @@ mod tests {
         assert!(body.get("systemInstruction").is_some());
         assert!(body.get("contents").is_some());
         assert_eq!(body["generationConfig"]["maxOutputTokens"], 4096);
+        assert_eq!(body["contents"][0]["parts"][0]["text"], "안녕");
+    }
+
+    #[test]
+    fn test_build_request_body_with_content_blocks() {
+        // #21: inlineData part 변환 (DS-40 §6.4)
+        let req = ProviderMessageRequest {
+            session_id: "s1".into(),
+            provider: AiProviderKind::Gemini,
+            model: "gemini-2.0-flash".into(),
+            system_prompt: "system".into(),
+            messages: vec![ProviderMessage {
+                role: MessageRole::User,
+                content: "이미지를 검토해 주세요.".into(),
+                content_blocks: Some(vec![
+                    ProviderContentBlock::Text { text: "이미지를 검토해 주세요.".into() },
+                    ProviderContentBlock::Image {
+                        attachment_id: "att-1".into(),
+                        media_type: "image/png".into(),
+                        base64_data: "iVBORw0KGgo=".into(),
+                    },
+                    ProviderContentBlock::DocumentText {
+                        attachment_id: "att-2".into(),
+                        filename: "spec.yaml".into(),
+                        media_type: "application/x-yaml".into(),
+                        extracted_text: "key: value".into(),
+                        truncated: false,
+                    },
+                ]),
+            }],
+            attachments: vec![],
+            temperature: None,
+            max_tokens: None,
+            tools: vec![],
+        };
+        let body = GeminiApiAdapter::build_request_body(&req);
+        let parts = &body["contents"][0]["parts"];
+        assert_eq!(parts[0]["text"], "이미지를 검토해 주세요.");
+        assert_eq!(parts[1]["inlineData"]["mimeType"], "image/png");
+        assert_eq!(parts[1]["inlineData"]["data"], "iVBORw0KGgo=");
+        assert_eq!(parts[2]["text"], "[첨부 문서: spec.yaml, application/x-yaml]\nkey: value");
     }
 
     #[test]

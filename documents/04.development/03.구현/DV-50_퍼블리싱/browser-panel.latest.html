@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Browser Panel Publishing Draft</title>
+  <link rel="stylesheet" href="./browser-panel.latest.css">
+</head>
+<body>
+  <main class="draft-page">
+    <header class="draft-header">
+      <div>
+        <p class="draft-kicker">DV-50 Publishing Draft</p>
+        <h1>Browser Panel UX</h1>
+      </div>
+      <p class="draft-note">WebviewWindow overlay home and toolbar states</p>
+    </header>
+
+    <section class="preview-grid" aria-label="Browser panel previews">
+      <article class="preview-frame" aria-labelledby="dark-title">
+        <div class="preview-label">
+          <h2 id="dark-title">Dark mode</h2>
+          <span>Home</span>
+        </div>
+
+        <section class="browser-panel" aria-label="Dark browser panel">
+          <div class="address-bar">
+            <div class="nav-group" aria-label="Navigation controls">
+              <button class="nav-btn" type="button" aria-label="뒤로">‹</button>
+              <button class="nav-btn is-disabled" type="button" aria-label="앞으로" disabled>›</button>
+              <button class="nav-btn" type="button" aria-label="새로고침">↻</button>
+              <button class="nav-btn" type="button" aria-label="홈">⌂</button>
+            </div>
+
+            <label class="url-shell" aria-label="주소">
+              <span class="lock-dot" aria-hidden="true"></span>
+              <input class="url-input" value="https://github.com/patrickukim" aria-label="URL">
+              <span class="loading-indicator" aria-label="로딩 중"></span>
+            </label>
+
+            <button class="close-btn" type="button" aria-label="닫기">×</button>
+          </div>
+
+          <div class="webview-placeholder">
+            <div class="browser-home">
+              <div class="home-hero">
+                <div class="home-mark" aria-hidden="true">⌘</div>
+                <div>
+                  <p class="home-title">브라우저</p>
+                  <p class="home-subtitle">주소 입력 또는 바로가기 선택</p>
+                </div>
+              </div>
+
+              <section class="home-section" aria-labelledby="quick-dark">
+                <div class="section-heading">
+                  <h3 id="quick-dark">바로가기</h3>
+                  <span>4</span>
+                </div>
+                <div class="shortcut-grid">
+                  <button class="shortcut-card" type="button">
+                    <span class="shortcut-icon redmine">R</span>
+                    <span class="shortcut-name">레드마인</span>
+                    <span class="shortcut-url">211.117.60.5:8080</span>
+                  </button>
+                  <button class="shortcut-card" type="button">
+                    <span class="shortcut-icon github">G</span>
+                    <span class="shortcut-name">GitHub</span>
+                    <span class="shortcut-url">github.com</span>
+                  </button>
+                  <button class="shortcut-card" type="button">
+                    <span class="shortcut-icon docs">A</span>
+                    <span class="shortcut-name">Anthropic Docs</span>
+                    <span class="shortcut-url">docs.anthropic.com</span>
+                  </button>
+                  <button class="shortcut-card" type="button">
+                    <span class="shortcut-icon openai">O</span>
+                    <span class="shortcut-name">OpenAI Docs</span>
+                    <span class="shortcut-url">platform.openai.com</span>
+                  </button>
+                </div>
+              </section>
+
+              <section class="home-section" aria-labelledby="recent-dark">
+                <div class="section-heading">
+                  <h3 id="recent-dark">최근 방문</h3>
+                  <button class="text-action" type="button">전체 삭제</button>
+                </div>
+                <div class="recent-list">
+                  <button class="recent-row" type="button">
+                    <span class="recent-favicon">G</span>
+                    <span class="recent-main">
+                      <span class="recent-title">Pull requests · patricks</span>
+                      <span class="recent-url">github.com/patrickukim/patricks</span>
+                    </span>
+                    <time>방금</time>
+                  </button>
+                  <button class="recent-row" type="button">
+                    <span class="recent-favicon">R</span>
+                    <span class="recent-main">
+                      <span class="recent-title">Issue #DV-50 Browser Panel</span>
+                      <span class="recent-url">211.117.60.5:8080/issues/50</span>
+                    </span>
+                    <time>12분 전</time>
+                  </button>
+                  <button class="recent-row" type="button">
+                    <span class="recent-favicon">A</span>
+                    <span class="recent-main">
+                      <span class="recent-title">Messages API reference</span>
+                      <span class="recent-url">docs.anthropic.com/api/messages</span>
+                    </span>
+                    <time>어제</time>
+                  </button>
+                </div>
+              </section>
+            </div>
+          </div>
+        </section>
+      </article>
+
+      <article class="preview-frame" data-theme="light" aria-labelledby="light-title">
+        <div class="preview-label">
+          <h2 id="light-title">Light mode</h2>
+          <span>Loading</span>
+        </div>
+
+        <section class="browser-panel" aria-label="Light browser panel">
+          <div class="address-bar is-loading">
+            <div class="nav-group" aria-label="Navigation controls">
+              <button class="nav-btn" type="button" aria-label="뒤로">‹</button>
+              <button class="nav-btn" type="button" aria-label="앞으로">›</button>
+              <button class="nav-btn" type="button" aria-label="새로고침">↻</button>
+              <button class="nav-btn is-active" type="button" aria-label="홈">⌂</button>
+            </div>
+
+            <label class="url-shell" aria-label="주소">
+              <span class="lock-dot" aria-hidden="true"></span>
+              <input class="url-input" value="https://docs.anthropic.com/" aria-label="URL">
+              <span class="loading-indicator" aria-label="로딩 중"></span>
+            </label>
+
+            <button class="close-btn" type="button" aria-label="닫기">×</button>
+          </div>
+
+          <div class="webview-placeholder">
+            <div class="browser-home">
+              <div class="loading-card" role="status">
+                <span class="large-spinner"></span>
+                <span>브라우저 여는 중</span>
+              </div>
+
+              <section class="home-section" aria-labelledby="quick-light">
+                <div class="section-heading">
+                  <h3 id="quick-light">바로가기</h3>
+                  <span>4</span>
+                </div>
+                <div class="shortcut-grid">
+                  <button class="shortcut-card" type="button">
+                    <span class="shortcut-icon redmine">R</span>
+                    <span class="shortcut-name">레드마인</span>
+                    <span class="shortcut-url">211.117.60.5:8080</span>
+                  </button>
+                  <button class="shortcut-card" type="button">
+                    <span class="shortcut-icon github">G</span>
+                    <span class="shortcut-name">GitHub</span>
+                    <span class="shortcut-url">github.com</span>
+                  </button>
+                  <button class="shortcut-card" type="button">
+                    <span class="shortcut-icon docs">A</span>
+                    <span class="shortcut-name">Anthropic Docs</span>
+                    <span class="shortcut-url">docs.anthropic.com</span>
+                  </button>
+                  <button class="shortcut-card" type="button">
+                    <span class="shortcut-icon openai">O</span>
+                    <span class="shortcut-name">OpenAI Docs</span>
+                    <span class="shortcut-url">platform.openai.com</span>
+                  </button>
+                </div>
+              </section>
+
+              <section class="home-section" aria-labelledby="recent-light">
+                <div class="section-heading">
+                  <h3 id="recent-light">최근 방문</h3>
+                  <button class="text-action" type="button">전체 삭제</button>
+                </div>
+                <div class="recent-list">
+                  <button class="recent-row" type="button">
+                    <span class="recent-favicon">O</span>
+                    <span class="recent-main">
+                      <span class="recent-title">Responses API</span>
+                      <span class="recent-url">platform.openai.com/docs/api-reference/responses</span>
+                    </span>
+                    <time>4분 전</time>
+                  </button>
+                  <button class="recent-row" type="button">
+                    <span class="recent-favicon">G</span>
+                    <span class="recent-main">
+                      <span class="recent-title">WebviewWindow overlay branch</span>
+                      <span class="recent-url">github.com/patrickukim/patricks/tree/browser-panel</span>
+                    </span>
+                    <time>1시간 전</time>
+                  </button>
+                </div>
+              </section>
+            </div>
+          </div>
+        </section>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

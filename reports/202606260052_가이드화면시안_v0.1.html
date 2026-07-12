@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lugh GuideView 시안 v0.1</title>
+  <style>
+    :root {
+      --bg-base: #0f1117;
+      --bg-panel: #1a1d27;
+      --bg-panel-2: #141d2b;
+      --text-primary: #f1f5f9;
+      --text-muted: #94a3b8;
+      --accent: #6366f1;
+      --primary: #5eead4;
+      --border: #2d3148;
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 16% 6%, rgba(94, 234, 212, 0.11), transparent 28%),
+        radial-gradient(circle at 86% 0%, rgba(99, 102, 241, 0.18), transparent 32%),
+        var(--bg-base);
+      color: var(--text-primary);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .guide-view {
+      width: min(1180px, calc(100vw - 56px));
+      min-height: 100vh;
+      margin: 0 auto;
+      display: grid;
+      grid-template-rows: auto auto auto auto;
+      gap: 24px;
+      padding: 48px 0;
+    }
+
+    .guide-hero {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 34px;
+      background: rgba(26, 29, 39, 0.88);
+    }
+
+    .guide-hero__eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 28px;
+      border: 1px solid rgba(94, 234, 212, 0.36);
+      border-radius: 999px;
+      padding: 0 11px;
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .guide-hero__title {
+      margin: 18px 0 0;
+      color: var(--text-primary);
+      font-size: 56px;
+      font-weight: 860;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .guide-hero__slogan {
+      max-width: 780px;
+      margin: 16px 0 0;
+      color: var(--text-primary);
+      font-size: 24px;
+      font-weight: 720;
+      line-height: 1.35;
+    }
+
+    .guide-hero__copy {
+      max-width: 760px;
+      margin: 12px 0 0;
+      color: var(--text-muted);
+      font-size: 15px;
+      line-height: 1.65;
+    }
+
+    .guide-section {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      background: rgba(26, 29, 39, 0.82);
+    }
+
+    .guide-section__header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .guide-section__title {
+      margin: 0;
+      color: var(--text-primary);
+      font-size: 22px;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+
+    .guide-section__hint {
+      margin: 5px 0 0;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .role-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .role-card {
+      min-height: 138px;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 15px;
+      background: var(--bg-panel-2);
+    }
+
+    .role-card--pm {
+      border-color: rgba(94, 234, 212, 0.42);
+    }
+
+    .role-card__icon {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: #101521;
+      font-size: 19px;
+    }
+
+    .role-card__name {
+      margin: 0;
+      color: var(--text-primary);
+      font-size: 15px;
+      font-weight: 780;
+    }
+
+    .role-card__description {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .quick-start-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .quick-step-card {
+      min-height: 164px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      background: var(--bg-panel-2);
+    }
+
+    .quick-step-card__number {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 820;
+    }
+
+    .quick-step-card__title {
+      margin: 16px 0 0;
+      color: var(--text-primary);
+      font-size: 17px;
+      font-weight: 800;
+    }
+
+    .quick-step-card__description {
+      margin: 9px 0 0;
+      color: var(--text-muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .guide-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      background: rgba(20, 29, 43, 0.92);
+    }
+
+    .guide-footer__text {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .guide-start-button {
+      min-width: 148px;
+      height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid transparent;
+      border-radius: 7px;
+      padding: 0 18px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 780;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .guide-start-button:hover {
+      background: #818cf8;
+    }
+
+    .guide-start-button:focus-visible {
+      outline: 0;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <main class="guide-view">
+    <header class="guide-hero">
+      <span class="guide-hero__eyebrow">AgiTeamBuilder Desktop GUI</span>
+      <h1 class="guide-hero__title">Lugh</h1>
+      <p class="guide-hero__slogan">모든 기술을 하나로, 7개의 AI가 하나의 팀으로</p>
+      <p class="guide-hero__copy">루흐는 PM이 AI 7역할 팀을 한 화면에서 부팅하고, 지시하고, 산출물과 이슈 흐름까지 통합 관리하도록 설계된 데스크탑 운영 콘솔입니다.</p>
+    </header>
+
+    <section class="guide-section" aria-labelledby="team-title">
+      <div class="guide-section__header">
+        <div>
+          <h2 class="guide-section__title" id="team-title">팀 소개</h2>
+          <p class="guide-section__hint">프로젝트를 구성하는 7개의 AI 역할</p>
+        </div>
+      </div>
+      <div class="role-grid">
+        <article class="role-card role-card--pm">
+          <div class="role-card__icon" aria-hidden="true">🧭</div>
+          <h3 class="role-card__name">PM</h3>
+          <p class="role-card__description">프로젝트를 이끄는 의사결정자</p>
+        </article>
+        <article class="role-card">
+          <div class="role-card__icon" aria-hidden="true">🏛️</div>
+          <h3 class="role-card__name">Architect</h3>
+          <p class="role-card__description">시스템 설계와 기술 방향 결정</p>
+        </article>
+        <article class="role-card">
+          <div class="role-card__icon" aria-hidden="true">⚙️</div>
+          <h3 class="role-card__name">DeveloperBE</h3>
+          <p class="role-card__description">백엔드 로직과 API 구현</p>
+        </article>
+        <article class="role-card">
+          <div class="role-card__icon" aria-hidden="true">🖥️</div>
+          <h3 class="role-card__name">DeveloperFE</h3>
+          <p class="role-card__description">UI와 프론트엔드 구현</p>
+        </article>
+        <article class="role-card">
+          <div class="role-card__icon" aria-hidden="true">🚀</div>
+          <h3 class="role-card__name">DevOps</h3>
+          <p class="role-card__description">빌드·배포·인프라 관리</p>
+        </article>
+        <article class="role-card">
+          <div class="role-card__icon" aria-hidden="true">🎨</div>
+          <h3 class="role-card__name">Designer</h3>
+          <p class="role-card__description">UX 설계와 비주얼 시안</p>
+        </article>
+        <article class="role-card">
+          <div class="role-card__icon" aria-hidden="true">🔍</div>
+          <h3 class="role-card__name">QA</h3>
+          <p class="role-card__description">품질 감리와 결함 관리</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="guide-section" aria-labelledby="quick-start-title">
+      <div class="guide-section__header">
+        <div>
+          <h2 class="guide-section__title" id="quick-start-title">빠른 시작</h2>
+          <p class="guide-section__hint">설정에서 실행까지 3단계 흐름</p>
+        </div>
+      </div>
+      <div class="quick-start-grid">
+        <article class="quick-step-card">
+          <div class="quick-step-card__number">1</div>
+          <h3 class="quick-step-card__title">프로젝트 설정</h3>
+          <p class="quick-step-card__description">작업 경로와 API 키를 입력하고 팀 구성, 페르소나, 실행 옵션을 확인합니다.</p>
+        </article>
+        <article class="quick-step-card">
+          <div class="quick-step-card__number">2</div>
+          <h3 class="quick-step-card__title">팀 부팅</h3>
+          <p class="quick-step-card__description">AI 에이전트 7명을 동시에 부팅하고 READY 상태를 한 화면에서 확인합니다.</p>
+        </article>
+        <article class="quick-step-card">
+          <div class="quick-step-card__number">3</div>
+          <h3 class="quick-step-card__title">작업 시작</h3>
+          <p class="quick-step-card__description">산출물, 레드마인, 브라우저 패널을 열어 PM 중심의 협업을 진행합니다.</p>
+        </article>
+      </div>
+    </section>
+
+    <footer class="guide-footer">
+      <p class="guide-footer__text">Lugh는 7개 역할의 상태와 작업 맥락을 하나의 워크스페이스에 모아 PM의 반복 운영 부담을 줄입니다.</p>
+      <a class="guide-start-button" href="/launcher">시작하기</a>
+    </footer>
+  </main>
+</body>
+</html>

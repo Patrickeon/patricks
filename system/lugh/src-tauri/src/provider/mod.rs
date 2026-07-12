@@ -23,6 +23,12 @@ pub type ProviderEventSink = tokio::sync::mpsc::Sender<ProviderEvent>;
 /// 모든 provider adapter는 이 trait을 구현한다.
 #[async_trait]
 pub trait AiProvider: Send + Sync {
+    /// 이미지(vision) content block 입력 지원 여부 (Redmine #21, DS-40 §7.3)
+    /// 미지원 provider는 이미지 첨부 시 전송 전 ATTACHMENT_UNSUPPORTED로 거절된다.
+    fn supports_vision(&self) -> bool {
+        true
+    }
+
     /// provider credential이 유효한지 검증한다.
     async fn validate_credential(&self, credential: CredentialRef) -> Result<ProviderHealth, AppError>;
 

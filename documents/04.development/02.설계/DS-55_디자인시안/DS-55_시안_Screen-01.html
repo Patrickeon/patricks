@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DS-55 시안 Screen-01 런처</title>
+  <link rel="stylesheet" href="./DS-55_mockup.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand"><div class="mark">A</div><div>AgiTeamBuilder Desktop</div><span class="pill">v0.1 design mockup</span></div>
+      <div class="nav"><span class="badge ok">로컬 런타임 정상</span><button class="btn">설정</button></div>
+    </header>
+    <section class="page" style="display:grid;grid-template-columns:470px 1fr;gap:28px;align-items:stretch;">
+      <div style="display:flex;flex-direction:column;justify-content:space-between;padding:18px 0;">
+        <div>
+          <div class="screen-label">Screen-01 / 런처 시작 화면</div>
+          <h1 style="margin-top:18px;">AI 팀을 프로젝트 단위로 부팅하고 운영합니다.</h1>
+          <p style="margin-top:18px;font-size:16px;line-height:1.65;">macOS cmux 기반 CLI 흐름을 Windows/Mac 설치형 GUI로 옮긴 PM 오케스트레이션 콘솔입니다.</p>
+        </div>
+        <div class="grid" style="grid-template-columns:1fr 1fr;gap:12px;">
+          <button class="btn primary" style="height:52px;">새 프로젝트</button>
+          <button class="btn" style="height:52px;">기존 프로젝트 열기</button>
+        </div>
+      </div>
+      <div class="card" style="padding:22px;display:grid;grid-template-rows:auto 1fr auto;gap:18px;">
+        <div class="between">
+          <div><h2>최근 프로젝트</h2><p style="margin-top:6px;">agiteam.json을 기준으로 프로젝트를 다시 엽니다.</p></div>
+          <span class="badge info">최근 4개</span>
+        </div>
+        <div class="grid" style="grid-template-columns:1fr 1fr;align-content:start;">
+          <article class="panel" style="padding:18px;border-color:rgba(94,234,212,.38);">
+            <div class="between"><h3>tos</h3><span class="badge ok">READY</span></div>
+            <p style="margin-top:9px;">/Projects/patricks</p>
+            <div class="meter" style="margin-top:18px;"><span style="width:82%;"></span></div>
+            <div class="row" style="margin-top:14px;"><span class="pill">A track</span><span class="pill">Tauri v2</span></div>
+          </article>
+          <article class="panel" style="padding:18px;">
+            <div class="between"><h3>client-rnd</h3><span class="badge busy">검증 필요</span></div>
+            <p style="margin-top:9px;">D:/work/client-rnd</p>
+            <div class="meter" style="margin-top:18px;"><span style="width:48%;"></span></div>
+            <div class="row" style="margin-top:14px;"><span class="pill">B track</span><span class="pill">Vue</span></div>
+          </article>
+          <article class="panel" style="padding:18px;">
+            <div class="between"><h3>agent-lab</h3><span class="badge">닫힘</span></div>
+            <p style="margin-top:9px;">/Users/team/agent-lab</p>
+            <div class="meter" style="margin-top:18px;"><span style="width:34%;"></span></div>
+            <div class="row" style="margin-top:14px;"><span class="pill">Prototype</span></div>
+          </article>
+          <article class="panel" style="padding:18px;border-style:dashed;">
+            <h3>파일에서 열기</h3>
+            <p style="margin-top:9px;">OS 파일 선택기로 agiteam.json을 지정합니다.</p>
+            <button class="btn" style="margin-top:24px;width:100%;">agiteam.json 선택</button>
+          </article>
+        </div>
+        <div class="between" style="border-top:1px solid var(--line-soft);padding-top:16px;"><span class="muted">Windows 10/11 + macOS Ventura 이상</span><span class="muted">Rust · Vue 3 · TypeScript</span></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

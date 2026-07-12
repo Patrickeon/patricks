@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DS-55 시안 Screen-03 팀 부팅 진행</title>
+  <link rel="stylesheet" href="./DS-55_mockup.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand"><div class="mark">A</div><div>팀 부팅 진행</div><span class="pill">6/7 단계 실행 중</span></div>
+      <div class="nav"><span class="badge busy">팀원 READY 감지 중</span><button class="btn danger">중지</button></div>
+    </header>
+    <section class="page" style="display:grid;grid-template-columns:1fr 410px;gap:18px;">
+      <section class="panel" style="padding:22px;">
+        <div class="between"><div><h2>부팅 파이프라인</h2><p>agiteam.sh main 흐름을 7단계 상태로 표시합니다.</p></div><span class="badge info">READY 5/6</span></div>
+        <div class="grid" style="grid-template-columns:repeat(7,1fr);gap:10px;margin-top:20px;">
+          <div class="panel" style="padding:12px;border-color:rgba(52,211,153,.35);"><span class="badge ok">1 완료</span><h3 style="margin-top:10px;">설정 로드</h3></div>
+          <div class="panel" style="padding:12px;border-color:rgba(52,211,153,.35);"><span class="badge ok">2 완료</span><h3 style="margin-top:10px;">환경 검증</h3></div>
+          <div class="panel" style="padding:12px;border-color:rgba(52,211,153,.35);"><span class="badge ok">3 완료</span><h3 style="margin-top:10px;">인증 네트워크</h3></div>
+          <div class="panel" style="padding:12px;border-color:rgba(52,211,153,.35);"><span class="badge ok">4 완료</span><h3 style="margin-top:10px;">구조 검증</h3></div>
+          <div class="panel" style="padding:12px;border-color:rgba(52,211,153,.35);"><span class="badge ok">5 완료</span><h3 style="margin-top:10px;">워크스페이스</h3></div>
+          <div class="panel" style="padding:12px;border-color:rgba(251,191,36,.45);"><span class="badge busy">6 진행</span><h3 style="margin-top:10px;">팀원 부팅</h3></div>
+          <div class="panel" style="padding:12px;"><span class="badge">7 대기</span><h3 style="margin-top:10px;">PM 실행</h3></div>
+        </div>
+        <div class="meter" style="margin-top:24px;height:12px;"><span style="width:78%;"></span></div>
+        <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:24px;">
+          <article class="panel" style="padding:16px;"><div class="between"><h3>환경 검증</h3><span class="badge ok">통과</span></div><p style="margin-top:8px;">claude, codex, gemini, git 확인</p></article>
+          <article class="panel" style="padding:16px;"><div class="between"><h3>API 연결</h3><span class="badge ok">정상</span></div><p style="margin-top:8px;">Anthropic, OpenAI 응답 확인</p></article>
+          <article class="panel" style="padding:16px;"><div class="between"><h3>자동 제출</h3><span class="badge info">2/5</span></div><p style="margin-top:8px;">승인 프롬프트 Enter 전송</p></article>
+        </div>
+        <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px;">
+          <div class="panel" style="padding:14px;"><div class="row"><span class="status-dot"></span><h3>DeveloperBE</h3></div><p style="margin-top:8px;">READY: DeveloperBE</p></div>
+          <div class="panel" style="padding:14px;"><div class="row"><span class="status-dot"></span><h3>Architect</h3></div><p style="margin-top:8px;">READY: Architect</p></div>
+          <div class="panel" style="padding:14px;"><div class="row"><span class="status-dot"></span><h3>DeveloperFE</h3></div><p style="margin-top:8px;">READY: DeveloperFE</p></div>
+          <div class="panel" style="padding:14px;"><div class="row"><span class="status-dot"></span><h3>DevOps</h3></div><p style="margin-top:8px;">READY: DevOps</p></div>
+          <div class="panel" style="padding:14px;"><div class="row"><span class="status-dot"></span><h3>QA</h3></div><p style="margin-top:8px;">READY: QA</p></div>
+          <div class="panel" style="padding:14px;border-color:rgba(251,191,36,.45);"><div class="row"><span class="status-dot busy"></span><h3>Designer</h3></div><p style="margin-top:8px;">초기 지침 주입 중...</p></div>
+        </div>
+      </section>
+      <aside class="panel" style="padding:18px;display:grid;grid-template-rows:auto 1fr auto;gap:14px;">
+        <div><h2>실시간 로그</h2><p style="margin-top:6px;">Rust Orchestrator 이벤트 스트림</p></div>
+        <div class="terminal panel" style="padding:14px;overflow:hidden;background:#070b12;">
+          [20:21:41] load_config: agiteam.json parsed<br>
+          [20:21:42] validate_environment: all tools found<br>
+          [20:21:43] check_api_reachable: anthropic ok, openai ok<br>
+          [20:21:45] spawn DeveloperBE -> READY<br>
+          [20:21:48] spawn Architect -> READY<br>
+          [20:21:52] spawn DeveloperFE -> READY<br>
+          [20:21:56] spawn DevOps -> READY<br>
+          [20:22:00] spawn QA -> READY<br>
+          [20:22:05] spawn Designer waiting signal...
+        </div>
+        <div class="row"><button class="btn">설정으로</button><button class="btn primary">강제 진행</button><button class="btn">재시도</button></div>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>

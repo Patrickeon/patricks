@@ -30,3 +30,11 @@ export async function saveWorkspaceConfig(
 ): Promise<void> {
   return invoke<void>('save_workspace_config', { workspaceId, config })
 }
+
+/** project_state.yaml을 디스크에 저장한다 (#18 fix: SettingsView 직접 invoke 이동) */
+export async function writeProjectState(
+  workspaceId: string,
+  state: import('./types').ProjectState,
+): Promise<void> {
+  return invoke<void>('write_project_state', { workspaceId, state })
+}

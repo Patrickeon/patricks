@@ -29,3 +29,8 @@ export async function getMaskedCredential(
 ): Promise<{ provider: string; account: string; has_secret: boolean }> {
   return invoke('get_masked_credential', { provider, account })
 }
+
+/** Claude Code OAuth 로그인 감지 (#18 fix: SettingsView 직접 invoke 이동) */
+export async function checkClaudeOauth(): Promise<{ ok: boolean }> {
+  return invoke<{ ok: boolean }>('check_claude_oauth')
+}

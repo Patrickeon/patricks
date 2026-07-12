@@ -1,14 +1,17 @@
 business_type: "Reverse"
-current_mode: project        # project / operation
-milestone: M0                # M0 착수준비 / M1 WBS / M-X 운영진입 (코드 정의: RACI §7.7)
+current_mode: operation      # project / operation
+milestone: M-X               # M0 착수준비 / M1 WBS / M-X 운영진입 (코드 정의: RACI §7.7)
 wbs_track: B        # A(Forward/Internal) / B(Reverse) — 세부 마일스톤 트랙
 milestones:
   - code: B1
-    status: 대기
-    evidence: ""
+    status: 승인완료
+    evidence: "DV-10 환경구성서 + DS-10/20/30/40/50/55/60 설계도 역추출 + DS-55 시각증거 완료 (2026-06-23)"
   - code: B2
-    status: 대기
-    evidence: ""
+    status: 승인완료
+    evidence: "TS-05/TS-15/TS-70 + IM-05/IM-60/AN-50 + IM-40/IM-50 완료 (2026-06-23)"
   - code: B3
-    status: 대기
-    evidence: ""
+    status: 승인완료
+    evidence: "오케스트레이터 승인 — 설계 baseline 완료, 구현 착수 결정 (2026-06-23)"
+  - code: M-X
+    status: 승인완료
+    evidence: "오케스트레이터 승인 — M1 전체 완료 선언. macOS DMG 4.43MB, 기동 ≤4초, MG-40 11/11 닫힘. MG-20 완료보고서 v1.0 확정 (2026-06-25)"

@@ -379,7 +379,7 @@ const tabs: { id: ActiveTab; label: string }[] = [
   gap: 14px;
   padding: 16px 24px;
   border-bottom: 1px solid var(--line-soft);
-  background: rgba(9,13,21,0.8);
+  background: var(--bg-panel-header);
   flex-shrink: 0;
 }
 
@@ -410,7 +410,7 @@ h2 { font-size: 16px; font-weight: 600; color: var(--text-primary); }
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: rgba(8,12,19,0.5);
+  background: var(--bg-panel-2);
 }
 
 .tab-btn {
@@ -594,7 +594,7 @@ h2 { font-size: 16px; font-weight: 600; color: var(--text-primary); }
   gap: 10px;
   padding: 14px 24px;
   border-top: 1px solid var(--line-soft);
-  background: rgba(9,13,21,0.7);
+  background: var(--bg-panel-header);
   flex-shrink: 0;
 }
 

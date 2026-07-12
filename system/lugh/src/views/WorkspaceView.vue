@@ -1,6 +1,6 @@
 <!-- Screen-04: 팀 워크스페이스 — 메인 작업 화면 (DS-50 §5) -->
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed } from 'vue'
+import { onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore } from '@/stores/project'
 import { useRoleStore } from '@/stores/role'
@@ -40,6 +40,13 @@ const totalCount = computed(() => roleStore.totalCount)
 // ── 사이드바 상태 ─────────────────────────────────────────
 const activeSidebar = computed(() => workspaceStore.activeSidebar)
 
+// store 액션(openBrowserSearch 등)으로 사이드바가 외부에서 전환되면 라우트도 동기화
+watch(activeSidebar, (panel) => {
+  if (panel === 'deliverables') router.push('/workspace/deliverables')
+  else if (panel === 'redmine')  router.push('/workspace/redmine')
+  else if (panel === 'browser')  router.push('/workspace/browser')
+})
+
 // ── 이벤트 리스너 ─────────────────────────────────────────
 let unlistenAgent: (() => void) | null = null
 let unlistenDoc: (() => void) | null = null
@@ -72,11 +79,17 @@ onMounted(async () => {
 
   // 산출물 패널 기본 열기 (처음 진입 시)
   workspaceStore.openSidebar('deliverables')
+
+  // 창 크기 변경 시 사이드바 폭 재클램프 (#20)
+  window.addEventListener('resize', onWindowResize)
 })
 
 onUnmounted(() => {
   unlistenAgent?.()
   unlistenDoc?.()
+  window.removeEventListener('resize', onWindowResize)
+  // 드래그 도중 unmount 안전 정리 (#20)
+  onSplitterMouseUp()
 })
 
 // ── 액션 ──────────────────────────────────────────────────
@@ -86,6 +99,39 @@ function toggleSidebar(panel: 'deliverables' | 'redmine' | 'browser' | 'team-sta
   if (panel === 'deliverables') router.push('/workspace/deliverables')
   else if (panel === 'redmine')      router.push('/workspace/redmine')
   else if (panel === 'browser')      router.push('/workspace/browser')
+}
+
+// ── 사이드바 리사이즈 스플리터 (#20) ─────────────────────────
+// 패널이 우측에 있으므로 왼쪽으로 드래그하면 폭 증가
+let resizeStartX = 0
+let resizeStartWidth = 0
+
+function onSplitterMouseDown(e: MouseEvent) {
+  e.preventDefault()
+  resizeStartX = e.clientX
+  resizeStartWidth = workspaceStore.sidebarWidth
+  workspaceStore.beginSidebarResize()
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+  window.addEventListener('mousemove', onSplitterMouseMove)
+  window.addEventListener('mouseup', onSplitterMouseUp)
+}
+
+function onSplitterMouseMove(e: MouseEvent) {
+  workspaceStore.setSidebarWidth(resizeStartWidth + (resizeStartX - e.clientX))
+}
+
+function onSplitterMouseUp() {
+  window.removeEventListener('mousemove', onSplitterMouseMove)
+  window.removeEventListener('mouseup', onSplitterMouseUp)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  workspaceStore.endSidebarResize()
+}
+
+// 창 크기 변경 시 min~max(화면 60%) 범위 재클램프
+function onWindowResize() {
+  workspaceStore.reclampSidebarWidth()
 }
 
 function openSettings() {
@@ -204,7 +250,18 @@ const headerAccent = computed(() => {
 
       <!-- 사이드바 확장 패널 -->
       <Transition name="slide-in">
-        <div v-if="activeSidebar" class="sidebar-panel">
+        <div
+          v-if="activeSidebar"
+          class="sidebar-panel"
+          :class="{ resizing: workspaceStore.isSidebarResizing }"
+          :style="{ '--sidebar-width': workspaceStore.sidebarWidth + 'px' }"
+        >
+          <!-- 리사이즈 스플리터 (#20) — 안쪽(좌측) 경계 드래그로 폭 조절 -->
+          <div
+            class="sidebar-resizer"
+            title="드래그하여 폭 조절"
+            @mousedown="onSplitterMouseDown"
+          />
           <div class="sidebar-panel-header">
             <span class="sidebar-panel-title">
               <template v-if="activeSidebar === 'deliverables'">📄 산출물</template>
@@ -309,6 +366,8 @@ const headerAccent = computed(() => {
   background: var(--bg-ws-header);
   flex-shrink: 0;
 }
+
+[data-theme="light"] .ws-header { border-bottom-color: rgba(0,0,0,0.08); }
 
 .ws-brand { display: flex; align-items: center; gap: 10px; }
 
@@ -449,15 +508,45 @@ const headerAccent = computed(() => {
 
 .sidebar-icon:hover { border-color: rgba(99,102,241,0.7); background: rgba(99,102,241,0.15); }
 
+[data-theme="light"] .sidebar-icon {
+  border-color: rgba(0,0,0,0.10);
+  background: rgba(0,0,0,0.04);
+}
+
 /* ── 사이드바 확장 패널 ── */
 .sidebar-panel {
-  width: 560px;
+  /* #20: 폭은 CSS 변수로 바인딩 (inline width 대신 — slide-in 전환과 충돌 방지) */
+  width: var(--sidebar-width, 560px);
   flex-shrink: 0;
   background: var(--bg-panel);
   border-left: 1px solid var(--line-soft);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
+}
+
+/* ── 리사이즈 스플리터 (#20) ── */
+.sidebar-resizer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.12s;
+}
+
+.sidebar-resizer:hover,
+.sidebar-panel.resizing .sidebar-resizer {
+  background: rgba(99,102,241,0.45);
+}
+
+/* 드래그 중 패널 내부 iframe/텍스트가 mousemove를 가로채지 않도록 */
+.sidebar-panel.resizing .sidebar-panel-body {
+  pointer-events: none;
 }
 
 .sidebar-panel-header {
@@ -500,6 +589,9 @@ const headerAccent = computed(() => {
 .statusbar-item { display: flex; align-items: center; gap: 5px; font-size: 11px; }
 .statusbar-label { color: #64748b; }
 .statusbar-value { color: #94a3b8; font-weight: 500; }
+
+[data-theme="light"] .statusbar-label { color: #8a7060; }
+[data-theme="light"] .statusbar-value { color: #5a4232; }
 
 /* ── 오버레이 공통 ── */
 .overlay-backdrop {

@@ -18,3 +18,17 @@ node_modules/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# MemPalace per-project files (issue #185)
+mempalace.yaml
+entities.json
+
+# 산출물 버전관리 — 과거본 보존 폴더 (SSOT 정책: git 추적 배제)
+_archive/
+
+# 백업/임시 파일
+*.bak
+*.output
+
+# 중첩 저장소 (별도 프로젝트 복제본 — 본 저장소에 포함하지 않음)
+system/patricks/

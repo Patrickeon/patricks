@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DS-55 시안 Screen-06 레드마인</title>
+  <link rel="stylesheet" href="./DS-55_mockup.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand"><div class="mark">A</div><div>레드마인 패널</div><span class="pill">http://211.117.60.5:8080</span></div>
+      <div class="nav"><select class="select" style="width:180px;"><option>project_id: tos</option></select><button class="btn">새로고침</button><button class="btn primary">이슈 생성</button></div>
+    </header>
+    <section class="page" style="display:grid;grid-template-columns:1fr 420px;gap:18px;">
+      <section class="panel" style="padding:18px;">
+        <div class="between"><div><h2>이슈 목록</h2><p>번호, 제목, 상태, 담당자, 진척률을 한 화면에서 관리합니다.</p></div><div class="row"><span class="badge ok">Open 12</span><span class="badge">Closed 4</span></div></div>
+        <table class="table" style="margin-top:16px;">
+          <tr><th>#</th><th>트래커</th><th>제목</th><th>상태</th><th>담당자</th><th>진척률</th></tr>
+          <tr><td>128</td><td>새기능</td><td>Screen-04 팀 워크스페이스 구현</td><td><span class="badge busy">진행</span></td><td>프개발</td><td><div class="meter"><span style="width:64%;"></span></div></td></tr>
+          <tr><td>127</td><td>새기능</td><td>Rust Redmine API Client</td><td><span class="badge ok">해결</span></td><td>박개발</td><td><div class="meter"><span style="width:100%;"></span></div></td></tr>
+          <tr><td>126</td><td>결함</td><td>READY 감지 타임아웃 메시지 누락</td><td><span class="badge err">의견</span></td><td>홍감리</td><td><div class="meter"><span style="width:20%;"></span></div></td></tr>
+          <tr><td>125</td><td>지원</td><td>Windows Credential Manager 저장 검증</td><td><span class="badge busy">진행</span></td><td>김데옵</td><td><div class="meter"><span style="width:42%;"></span></div></td></tr>
+          <tr><td>124</td><td>새기능</td><td>DS-55 화면별 디자인 시안</td><td><span class="badge busy">진행</span></td><td>장이너</td><td><div class="meter"><span style="width:86%;"></span></div></td></tr>
+        </table>
+        <div class="panel" style="padding:16px;margin-top:18px;">
+          <div class="between"><h3>이슈 생성</h3><span class="badge info">tracker_id 명시</span></div>
+          <div class="grid" style="grid-template-columns:150px 1fr 160px;margin-top:12px;"><select class="select"><option>새기능 (2)</option><option>결함 (1)</option><option>지원 (3)</option></select><input class="input" value="제목을 입력하세요"><select class="select"><option>장이너</option></select></div>
+          <textarea class="textarea" style="margin-top:10px;">재현 절차 / 기대 결과 / 실제 결과 / 심각도 또는 기능 상세를 입력합니다.</textarea>
+        </div>
+      </section>
+      <aside class="panel" style="padding:18px;display:grid;grid-template-rows:auto auto 1fr auto;gap:14px;">
+        <div><h2>#124 DS-55 화면별 디자인 시안</h2><p style="margin-top:8px;">tracker_id=2 · assigned_to=Designer</p></div>
+        <div class="row"><button class="btn">진행</button><button class="btn">해결</button><button class="btn primary">완료</button><button class="btn danger">거절</button></div>
+        <div class="panel" style="padding:14px;background:#0c121d;">
+          <div class="section-title">상세 / 코멘트</div>
+          <p style="line-height:1.6;">AN-40 §6 기준 Screen-01~07 화면별 디자인 시안을 DS-55 폴더에 작성한다. 다크 계열 개발자 도구 테마 권장.</p>
+          <div class="section-title" style="margin-top:22px;">진척률</div>
+          <div class="meter" style="height:12px;"><span style="width:86%;"></span></div>
+          <div class="section-title" style="margin-top:22px;">2단계 종결</div>
+          <p>작업자: 해결(status_id=3) → PM: 완료(status_id=5)</p>
+        </div>
+        <div><textarea class="textarea" placeholder="코멘트 내용"></textarea><button class="btn primary" style="width:100%;margin-top:10px;">코멘트 추가</button></div>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>

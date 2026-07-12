@@ -2,11 +2,16 @@
 // DS-60 §3.2: boot_team, boot_role, stop_role, send_agent_message 등
 
 use std::sync::Arc;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 use crate::{
     app_state::AppState,
+    chat_attachment,
     models::{
+        attachment::{
+            ChatAttachmentFailed, ChatAttachmentInput, ChatAttachmentPrepared,
+            PreparedChatAttachment,
+        },
         error::AppError,
         session::{
             AgentLifecycleState, AgentSessionDetail, BootTeamResult, AgentSessionSummary,
@@ -43,6 +48,7 @@ pub async fn boot_team(
                 if let Err(e) = svc_clone.send_message(
                     &pm_session_id,
                     &startup_msg,
+                    vec![],
                     &config_clone,
                     DEFAULT_MODEL,
                 ).await {
@@ -83,10 +89,12 @@ pub async fn stop_role(
 }
 
 /// ready 상태의 agent session에 사용자 메시지를 전송한다 (DS-60 §3.2)
+/// `attachments`가 없거나 빈 배열이면 기존 텍스트 전용 동작과 동일하다 (#21).
 #[tauri::command]
 pub async fn send_agent_message(
     session_id: String,
     content: String,
+    attachments: Option<Vec<PreparedChatAttachment>>,
     state: State<'_, AppState>,
 ) -> Result<MessageAck, AppError> {
     let workspace_id = state.get_workspace_id_for_session(&session_id)?;
@@ -96,7 +104,60 @@ pub async fn send_agent_message(
     // OAuth 계정에서 사용 가능한 모델 (2025-07 기준)
     let default_model = "claude-sonnet-4-5-20250929";
 
-    svc.send_message(&session_id, &content, &config, default_model).await
+    svc.send_message(
+        &session_id,
+        &content,
+        attachments.unwrap_or_default(),
+        &config,
+        default_model,
+    ).await
+}
+
+/// 채팅 입력창 첨부 1건을 검증하고 이미지 base64 또는 문서 추출 텍스트로 정규화한다
+/// (DS-60 §3.2 prepare_chat_attachment, Redmine #21)
+/// 성공 시 chat:attachment_prepared, 실패 시 chat:attachment_failed를 emit한다.
+#[tauri::command]
+pub async fn prepare_chat_attachment(
+    session_id: String,
+    attachment: ChatAttachmentInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<PreparedChatAttachment, AppError> {
+    // 세션 존재 검증 (미존재 세션이면 SESSION_NOT_FOUND)
+    let _workspace_id = state.get_workspace_id_for_session(&session_id)?;
+
+    let attachment_id = attachment.id.clone();
+    let filename = attachment.filename.clone();
+
+    // base64 decode·sha256·PDF 추출은 CPU 작업 → blocking pool로 위임
+    let result = tokio::task::spawn_blocking(move || chat_attachment::prepare_attachment(attachment))
+        .await
+        .map_err(|e| AppError::new("INTERNAL", format!("첨부 전처리 태스크 실패: {}", e)))?;
+
+    match result {
+        Ok(prepared) => {
+            let _ = app.emit(
+                "chat:attachment_prepared",
+                ChatAttachmentPrepared {
+                    session_id,
+                    attachment: prepared.clone(),
+                },
+            );
+            Ok(prepared)
+        }
+        Err(error) => {
+            let _ = app.emit(
+                "chat:attachment_failed",
+                ChatAttachmentFailed {
+                    session_id,
+                    attachment_id,
+                    filename,
+                    error: error.clone(),
+                },
+            );
+            Err(error)
+        }
+    }
 }
 
 /// 세션 상세 상태를 조회한다 (DS-60 §3.2)

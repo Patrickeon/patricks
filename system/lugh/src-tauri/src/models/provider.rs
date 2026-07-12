@@ -3,6 +3,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use super::attachment::{AttachmentExtractionStatus, AttachmentKind, AttachmentSource};
 use super::error::AppError;
 
 /// 지원 AI Provider 종류 (Redmine은 자격증명 저장 전용)
@@ -71,6 +72,7 @@ pub struct CredentialRef {
 }
 
 /// Provider에게 메시지를 보내기 위한 표준 요청 모델
+/// `attachments`는 Redmine #21 첨부 메타/본문 목록 — 기본값 빈 배열로 기존 호출 유지 (DS-40 §3.2)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderMessageRequest {
     pub session_id: String,
@@ -78,16 +80,60 @@ pub struct ProviderMessageRequest {
     pub model: String,
     pub system_prompt: String,
     pub messages: Vec<ProviderMessage>,
+    #[serde(default)]
+    pub attachments: Vec<ProviderAttachment>,
     pub temperature: Option<f32>,
     pub max_tokens: Option<u32>,
     pub tools: Vec<ToolDefinition>,
 }
 
 /// Provider 메시지 단건 (role + content)
+/// `content`는 하위 호환/로그 표시용 순수 텍스트, 첨부 포함 신규 호출은
+/// `content_blocks`가 provider 변환의 정본 (DS-40 §3.2)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderMessage {
     pub role: MessageRole,
     pub content: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_blocks: Option<Vec<ProviderContentBlock>>,
+}
+
+/// Provider 전송용 content block (DS-40 §3.2 ProviderContentBlock)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ProviderContentBlock {
+    Text {
+        text: String,
+    },
+    Image {
+        attachment_id: String,
+        media_type: String,
+        base64_data: String,
+    },
+    DocumentText {
+        attachment_id: String,
+        filename: String,
+        media_type: String,
+        extracted_text: String,
+        truncated: bool,
+    },
+}
+
+/// 첨부 표준 모델 (DS-40 §3.2.1 ProviderAttachment)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderAttachment {
+    pub id: String,
+    pub kind: AttachmentKind,
+    pub filename: String,
+    pub media_type: String,
+    pub size_bytes: u64,
+    pub source: AttachmentSource,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_base64: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extracted_text: Option<String>,
+    pub extraction_status: AttachmentExtractionStatus,
+    pub truncated: bool,
 }
 
 /// 메시지 역할

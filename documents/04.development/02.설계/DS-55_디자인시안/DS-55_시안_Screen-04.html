@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DS-55 시안 Screen-04 팀 워크스페이스</title>
+  <link rel="stylesheet" href="./DS-55_mockup.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand"><div class="mark">A</div><div>tos-dev</div><span class="pill">AgiTeamBuilder Desktop</span><span class="badge ok">7/7 READY</span></div>
+      <div class="nav"><button class="btn">산출물</button><button class="btn">레드마인</button><button class="btn">설정</button><button class="btn danger">팀 종료</button></div>
+    </header>
+    <section style="height:calc(100% - 64px);display:grid;grid-template-columns:430px 1fr 64px;grid-template-rows:1fr 36px;">
+      <section class="panel" style="margin:14px 7px 14px 14px;padding:16px;display:grid;grid-template-rows:auto 1fr auto;gap:12px;">
+        <div class="between"><div><h2>박피엠</h2><p>PM · claude</p></div><span class="badge ok">READY</span></div>
+        <div class="chat-log">
+          <div class="msg pm"><b>PM</b><br>장이너, VIS 작업을 시작해 주세요.</div>
+          <div class="msg"><b>PM Agent</b><br>요구사항과 FE 현황을 기준으로 7개 화면 시안을 준비 중입니다.</div>
+          <div class="msg"><b>Startup Files</b><br><span class="pill">AN-40</span> <span class="pill">RD020_FE</span> <span class="pill">project_state</span></div>
+        </div>
+        <div><textarea class="textarea" placeholder="PM에게 메시지 입력"></textarea><div class="between" style="margin-top:8px;"><span class="muted">Ctrl+Enter 전송</span><button class="btn primary">전송</button></div></div>
+      </section>
+      <section style="padding:14px 7px;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(3,1fr);gap:10px;">
+        <article class="panel" style="padding:12px;display:grid;grid-template-rows:auto 1fr auto;gap:8px;"><div class="between"><h3>DeveloperBE · 박개발</h3><span class="badge ok">READY</span></div><div class="terminal">API adapter 구현 완료 보고<br>Redmine client 타입 정의 확인</div><input class="input" value="백엔드 IPC 명세 확인해 주세요."></article>
+        <article class="panel" style="padding:12px;display:grid;grid-template-rows:auto 1fr auto;gap:8px;"><div class="between"><h3>Architect · 김아키</h3><span class="badge ok">READY</span></div><div class="terminal">DS-20 아키텍처 초안 정합성 검토 중</div><input class="input" value="화면-IPC 경계 검토 요청"></article>
+        <article class="panel" style="padding:12px;display:grid;grid-template-rows:auto 1fr auto;gap:8px;border-color:rgba(251,191,36,.4);"><div class="between"><h3>DeveloperFE · 프개발</h3><span class="badge busy">BUSY</span></div><div class="terminal">Vue component inventory 작성 중...</div><input class="input" value="DS-55 반영 준비"></article>
+        <article class="panel" style="padding:12px;display:grid;grid-template-rows:auto 1fr auto;gap:8px;"><div class="between"><h3>DevOps · 김데옵</h3><span class="badge ok">READY</span></div><div class="terminal">Windows/macOS bundle 조건 정리 완료</div><input class="input" value="빌드 파이프라인 확인"></article>
+        <article class="panel" style="padding:12px;display:grid;grid-template-rows:auto 1fr auto;gap:8px;"><div class="between"><h3>QA · 홍감리</h3><span class="badge ok">READY</span></div><div class="terminal">latest/archive 정책 감리 기준 준비</div><input class="input" value="시안 산출물 검토 준비"></article>
+        <article class="panel" style="padding:12px;display:grid;grid-template-rows:auto 1fr auto;gap:8px;border-color:rgba(94,234,212,.42);"><div class="between"><h3>Designer · 장이너</h3><span class="badge busy">BUSY</span></div><div class="terminal">Screen-01~07 HTML 목업 작성 중</div><input class="input" value="VIS 산출물 생성"></article>
+      </section>
+      <aside class="sidebar"><div class="icon-btn">D</div><div class="icon-btn">R</div><div class="icon-btn">B</div><div class="icon-btn">S</div></aside>
+      <footer style="grid-column:1/4;border-top:1px solid var(--line-soft);display:flex;align-items:center;justify-content:space-between;padding:0 18px;background:#080c13;color:var(--muted);font-size:12px;"><span>tos · business_type=desktop_gui · current_mode=development</span><span>milestone=VIS · wbs_track=A · streaming latency 42ms</span></footer>
+    </section>
+  </main>
+</body>
+</html>
