@@ -2,7 +2,7 @@
 // `claude --print` CLI 서브프로세스를 통해 메시지를 전송한다.
 // OAuth 직접 API rate_limit 우회용 폴백 어댑터.
 // CLI 응답 전체를 받은 뒤 청크 단위 emit으로 타이핑 효과를 재현한다.
-// DS-40 §4 (CLI 경로)
+// DS-40 §4 (CLI 경로) — #23: stream-json content 배열을 통한 이미지(vision) 지원 포함
 
 use async_trait::async_trait;
 use serde_json::Value;
@@ -36,30 +36,42 @@ impl ClaudeCliAdapter {
         Self
     }
 
-    /// CLI 전송용 메시지 텍스트 구성 (#21, DS-40 §7.3)
-    /// CLI 경로는 이미지 미지원(supports_vision=false, 전송 전 거절됨) —
-    /// 문서 첨부는 추출 텍스트만 프롬프트에 병합한다. 이미지 block은 조용히 누락하지 않고
-    /// 방어적으로 도달 시 파일명 표기만 남긴다 (정상 흐름에서는 도달 불가).
-    fn message_text(msg: &ProviderMessage) -> String {
+    /// CLI 전송용 메시지 content 필드 구성 (#21, #23 DS-40 §7.3)
+    /// content_blocks가 있으면 claude.rs::message_content와 동일한 Claude Messages API
+    /// content block 배열 스키마로 직렬화한다 — 텍스트 → {type:text}, 이미지 →
+    /// {type:image, source:{type:base64, media_type, data}}, 문서 첨부는 추출 텍스트를
+    /// text block으로 병합. 이 스키마는 #23 1단계 실증(claude --print --input-format
+    /// stream-json)에서 이미지 인식이 정상 동작함을 확인한 형식이다.
+    fn message_content(msg: &ProviderMessage) -> Value {
         match &msg.content_blocks {
             Some(blocks) if !blocks.is_empty() => {
-                let mut parts: Vec<String> = Vec::with_capacity(blocks.len());
-                for block in blocks {
-                    match block {
-                        ProviderContentBlock::Text { text } => parts.push(text.clone()),
+                let arr: Vec<Value> = blocks
+                    .iter()
+                    .map(|block| match block {
+                        ProviderContentBlock::Text { text } => {
+                            serde_json::json!({ "type": "text", "text": text })
+                        }
+                        ProviderContentBlock::Image { media_type, base64_data, .. } => {
+                            serde_json::json!({
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": media_type,
+                                    "data": base64_data,
+                                }
+                            })
+                        }
                         ProviderContentBlock::DocumentText {
                             filename, media_type, extracted_text, ..
-                        } => parts.push(document_block_text(filename, media_type, extracted_text)),
-                        ProviderContentBlock::Image { .. } => {
-                            // 이미지 미지원 — send_message 단계에서 ATTACHMENT_UNSUPPORTED로
-                            // 거절되므로 정상 흐름에서는 도달하지 않는다
-                            parts.push("[이미지 첨부: CLI provider 미지원]".to_string());
-                        }
-                    }
-                }
-                parts.join("\n\n")
+                        } => serde_json::json!({
+                            "type": "text",
+                            "text": document_block_text(filename, media_type, extracted_text),
+                        }),
+                    })
+                    .collect();
+                Value::Array(arr)
             }
-            _ => msg.content.clone(),
+            _ => Value::String(msg.content.clone()),
         }
     }
 
@@ -76,7 +88,7 @@ impl ClaudeCliAdapter {
                 "type": role_str,
                 "message": {
                     "role": role_str,
-                    "content": Self::message_text(msg)
+                    "content": Self::message_content(msg)
                 }
             });
             buf.push_str(&line.to_string());
@@ -88,10 +100,12 @@ impl ClaudeCliAdapter {
 
 #[async_trait]
 impl AiProvider for ClaudeCliAdapter {
-    /// Claude CLI shell provider는 MVP에서 이미지 첨부 미지원 (DS-40 §7.3)
-    /// 이미지 첨부가 있으면 전송 전 ATTACHMENT_UNSUPPORTED로 거절된다.
+    /// Claude CLI shell provider도 stream-json content 배열로 이미지 전달 지원 (#23)
+    /// 1단계 실증에서 `claude --print --input-format stream-json` stdin에 Anthropic
+    /// Messages API와 동일한 image content block을 태우면 CLI가 이를 파싱해 모델에
+    /// 전달하고, 실제 이미지 내용을 인식한 응답이 돌아옴을 확인했다 (DS-40 §7.3 갱신 필요).
     fn supports_vision(&self) -> bool {
-        false
+        true
     }
 
     async fn validate_credential(&self, _credential: CredentialRef) -> Result<ProviderHealth, AppError> {
@@ -267,10 +281,10 @@ mod tests {
     }
 
     #[test]
-    fn test_supports_vision_false() {
-        // #21: CLI shell provider는 이미지 미지원 (DS-40 §7.3)
+    fn test_supports_vision_true() {
+        // #23: CLI shell provider도 stream-json content 배열로 이미지 지원 (1단계 실증 확인)
         let adapter = ClaudeCliAdapter::new();
-        assert!(!adapter.supports_vision());
+        assert!(adapter.supports_vision());
     }
 
     #[test]
@@ -306,5 +320,93 @@ mod tests {
         assert!(stdin.contains("검토 부탁"));
         assert!(stdin.contains("[첨부 문서: spec.md, text/markdown]"));
         assert!(stdin.contains("# 명세 내용"));
+    }
+
+    #[test]
+    fn test_build_stdin_plain_text_content_is_json_string() {
+        // 하위 호환: content_blocks 없으면 content 필드는 여전히 순수 문자열이어야 한다
+        let req = base_request(vec![ProviderMessage {
+            role: MessageRole::User,
+            content: "안녕".into(),
+            content_blocks: None,
+        }]);
+        let stdin = ClaudeCliAdapter::build_stdin(&req);
+        let line = stdin.lines().next().expect("stdin에 최소 한 줄 있어야 함");
+        let val: Value = serde_json::from_str(line).expect("유효한 JSON 라인이어야 함");
+        assert!(val["message"]["content"].is_string());
+        assert_eq!(val["message"]["content"], "안녕");
+    }
+
+    #[test]
+    fn test_build_stdin_serializes_image_content_block() {
+        // #23: content_blocks에 Image가 있으면 Claude Messages API와 동일한
+        // {type:image, source:{type:base64, media_type, data}} 스키마로 직렬화된다.
+        // 이 정확한 스키마로 1단계 실증(claude --print --input-format stream-json)에서
+        // CLI가 이미지를 실제로 인식함을 확인했다.
+        let req = base_request(vec![ProviderMessage {
+            role: MessageRole::User,
+            content: "이 이미지 봐줘".into(),
+            content_blocks: Some(vec![
+                ProviderContentBlock::Text { text: "이 이미지 봐줘".into() },
+                ProviderContentBlock::Image {
+                    attachment_id: "att-img-1".into(),
+                    media_type: "image/png".into(),
+                    base64_data: "iVBORw0KGgo=".into(),
+                },
+            ]),
+        }]);
+        let stdin = ClaudeCliAdapter::build_stdin(&req);
+        let line = stdin.lines().next().expect("stdin에 최소 한 줄 있어야 함");
+        let val: Value = serde_json::from_str(line).expect("유효한 JSON 라인이어야 함");
+        let content = val["message"]["content"]
+            .as_array()
+            .expect("content_blocks 있으면 content는 배열이어야 함");
+        assert_eq!(content.len(), 2);
+        assert_eq!(content[0]["type"], "text");
+        assert_eq!(content[0]["text"], "이 이미지 봐줘");
+        assert_eq!(content[1]["type"], "image");
+        assert_eq!(content[1]["source"]["type"], "base64");
+        assert_eq!(content[1]["source"]["media_type"], "image/png");
+        assert_eq!(content[1]["source"]["data"], "iVBORw0KGgo=");
+    }
+
+    #[test]
+    fn test_build_stdin_multiturn_history_with_image_in_last_turn() {
+        // 멀티턴 히스토리 + 마지막 turn에만 이미지 첨부가 있는 케이스 하위호환 확인
+        let req = base_request(vec![
+            ProviderMessage {
+                role: MessageRole::User,
+                content: "안녕".into(),
+                content_blocks: None,
+            },
+            ProviderMessage {
+                role: MessageRole::Assistant,
+                content: "안녕하세요".into(),
+                content_blocks: None,
+            },
+            ProviderMessage {
+                role: MessageRole::User,
+                content: "이거 봐줘".into(),
+                content_blocks: Some(vec![
+                    ProviderContentBlock::Text { text: "이거 봐줘".into() },
+                    ProviderContentBlock::Image {
+                        attachment_id: "att-img-2".into(),
+                        media_type: "image/jpeg".into(),
+                        base64_data: "/9j/4AAQ".into(),
+                    },
+                ]),
+            },
+        ]);
+        let stdin = ClaudeCliAdapter::build_stdin(&req);
+        let lines: Vec<&str> = stdin.lines().collect();
+        assert_eq!(lines.len(), 3, "system 없는 3턴 모두 stdin에 포함되어야 함");
+
+        let turn1: Value = serde_json::from_str(lines[0]).unwrap();
+        assert!(turn1["message"]["content"].is_string());
+        assert_eq!(turn1["message"]["role"], "user");
+
+        let turn3: Value = serde_json::from_str(lines[2]).unwrap();
+        let content3 = turn3["message"]["content"].as_array().unwrap();
+        assert_eq!(content3[1]["source"]["media_type"], "image/jpeg");
     }
 }

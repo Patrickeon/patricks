@@ -612,7 +612,9 @@ mod tests {
 
     #[test]
     fn test_validate_send_image_unsupported_provider_rejected() {
-        // 이미지 미지원 provider(Claude CLI 등)는 전송 전체 거절 (DS-40 §7.3)
+        // 이미지 미지원 provider는 전송 전체 거절 (DS-40 §7.3). #23: Claude CLI는
+        // vision 지원으로 전환되어 더 이상 이 케이스의 예시가 아님 — 검증 로직 자체는
+        // vision_supported 플래그 기반 범용 로직이라 변경 없음.
         let atts = vec![ready_image("i1")];
         let e = validate_attachments_for_send("본문", &atts, false).unwrap_err();
         assert_eq!(e.code, "ATTACHMENT_UNSUPPORTED");

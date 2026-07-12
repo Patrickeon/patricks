@@ -287,7 +287,7 @@ impl AgentSessionService {
                         provider::create_provider(&provider_kind, api_key)
                     }
                     Err(_) => {
-                        // API 키 없음 → CLI 어댑터 사용 (rate_limit 없음, 이미지 미지원)
+                        // API 키 없음 → CLI 어댑터 사용 (rate_limit 없음, #23: 이미지 지원)
                         Box::new(crate::provider::claude_cli::ClaudeCliAdapter::new())
                     }
                 }

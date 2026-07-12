@@ -1,7 +1,7 @@
 ---
 doc: DS-40_API명세서
-version: v0.9
-last_updated: 2026-07-11
+version: v0.10
+last_updated: 2026-07-12
 status: draft
 author: Architect
 ---
@@ -21,6 +21,7 @@ author: Architect
 | v0.7 | 2026-07-09 | Architect | Redmine #21 backend 구현 완료 반영: §7 첨부 전처리 규격 현행 상태 명시, §3.2 provider.rs `attachments`/`content_blocks`/`ProviderContentBlock`/`ProviderAttachment` 현행 반영 기술로 갱신 (DS-60 v0.9와 교차 정합) |
 | v0.8 | 2026-07-11 | Architect | Redmine #17 설계전환: 임베디드 브라우저를 main 콘텐츠 영역 강제 핀 고정(child+좌표추종) 방식에서 **독립 이동 가능 창**으로 전환. §9 개요·URL규칙·`browser_open`(geometry 선택적 초기값화)·`browser:navigation`·정합성 항목 개정, `browser_resize` 폐기예정 표기. 구현 대기(전환상태 §9.1 명시), DS-60 v0.10과 교차 정합 |
 | v0.9 | 2026-07-11 | Architect | Redmine #17 **구현 완료 현행화**(BE/FE 구현 종료): §9.1 전환상태 주석 → 전환 완료(2026-07-11)·command 표에서 `browser_resize` 삭제, `browser_open` parent 제거·decorations/resizable true·geometry 전 인자 optional(기본 960×720) 확정, §9.8 `browser_resize` 상세절 삭제(command 완전 제거), §9.10 프론트 `ResizeObserver`/`resizeBrowser` 제거 확정, §9.11 목표/현행 구분 문단을 전환 완료 현행 기준으로 재작성. DS-60 v0.11과 교차 정합 |
+| v0.10 | 2026-07-12 | Architect | Redmine #23 **Claude OAuth/CLI 이미지 vision 지원 구현 완료 현행화**: §7.3 provider capability 표의 `Claude CLI/OAuth shell provider` 행을 'MVP 이미지 미지원 → `ATTACHMENT_UNSUPPORTED`'에서 'stream-json content 배열로 이미지 base64 전달(Anthropic Messages 스키마, #23), vision 미지원 모델만 `ATTACHMENT_UNSUPPORTED`'로 갱신. `claude_cli` `supports_vision=true` 반영 |
 
 ---
 
@@ -470,7 +471,7 @@ Gemini 연동은 provider/model capability가 vision을 지원할 때 `content_b
 | Claude | Messages API image base64 content block | 추출 텍스트 content block | 모델 capability가 vision false이면 `ATTACHMENT_UNSUPPORTED` |
 | OpenAI | Responses API `input_image` data URL | 추출 텍스트 `input_text` | 모델 capability가 vision false이면 `ATTACHMENT_UNSUPPORTED` |
 | Gemini | `inlineData` part | 추출 텍스트 part | 모델 capability가 vision false이면 `ATTACHMENT_UNSUPPORTED` |
-| Claude CLI/OAuth shell provider | MVP 이미지 미지원 | 추출 텍스트만 프롬프트에 병합 | 이미지 첨부가 있으면 전송 전 `ATTACHMENT_UNSUPPORTED` |
+| Claude CLI/OAuth shell provider | stream-json content 배열로 이미지 base64 전달(Anthropic Messages 스키마 image block, #23) | 추출 텍스트 content 블록/프롬프트 병합 | 모델 capability가 vision false이면 `ATTACHMENT_UNSUPPORTED` (`claude_cli`는 `supports_vision=true`) |
 
 Provider Adapter는 첨부를 조용히 누락하지 않는다. 하나 이상의 첨부가 미지원이면 메시지 전송 전체를 거절하고 frontend가 첨부 제거 또는 지원 provider 선택을 안내한다.
 
