@@ -100,6 +100,23 @@ pub struct AgentStatusChanged {
     pub changed_at: DateTime<Utc>,
 }
 
+/// clear_session_messages command 응답 (DS-60 §3.2, Redmine #24)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClearSessionResult {
+    pub session_id: String,
+    /// 삭제 전 메시지 건수
+    pub cleared_count: u32,
+    pub cleared_at: DateTime<Utc>,
+}
+
+/// agent:messages_cleared event payload (DS-60 §5.1, Redmine #24)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentMessagesCleared {
+    pub session_id: String,
+    pub cleared_count: u32,
+    pub cleared_at: DateTime<Utc>,
+}
+
 /// CommandResult — 단순 성공/실패 (DS-60 §2.2)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommandResult {

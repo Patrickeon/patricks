@@ -8,6 +8,7 @@ import type {
   CommandResult,
   ChatAttachmentInput,
   PreparedChatAttachment,
+  ClearSessionResult,
 } from './types'
 
 export async function bootTeam(workspaceId: string): Promise<BootTeamResult> {
@@ -69,5 +70,21 @@ export async function listAgentMessages(
     sessionId,
     cursor,
     limit,
+  })
+}
+
+/**
+ * 세션 대화 히스토리를 전부 삭제한다 (Redmine #24, DS-60 §3.2 clear_session_messages).
+ * - 세션 메타(lifecycle 상태·provider·startupFiles)와 페르소나 주입은 유지된다.
+ * - running/booting 상태에서 호출하면 Rust가 SESSION_BUSY AppError를 반환한다.
+ * - 존재하지 않는 세션이면 SESSION_NOT_FOUND를 반환한다.
+ * - 성공 시 `agent:messages_cleared` 이벤트가 emit되며, 실제 store 반영은
+ *   해당 이벤트 구독(useRoleStore.applyMessagesCleared)에서 수행한다.
+ */
+export async function clearSessionMessages(
+  sessionId: string,
+): Promise<ClearSessionResult> {
+  return invoke<ClearSessionResult>('clear_session_messages', {
+    sessionId,
   })
 }

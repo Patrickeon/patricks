@@ -6,10 +6,12 @@ import { useRoleStore } from '@/stores/role'
 import { useProjectStore } from '@/stores/project'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useDeliverableStore } from '@/stores/deliverable'
-import { sendAgentMessage } from '@/ipc/agent'
+import { sendAgentMessage, clearSessionMessages } from '@/ipc/agent'
 import { readDocument } from '@/ipc/document'
 import { useChatAttachments } from '@/composables/useChatAttachments'
+import { showToast } from '@/composables/toast'
 import AttachmentChips from '@/components/AttachmentChips.vue'
+import AppModal from '@/components/AppModal.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import type { AgentLifecycleState } from '@/ipc/types'
 
@@ -105,6 +107,42 @@ async function openStartupFile(filePath: string) {
 function isStreamingMsg(msgId: string) {
   return pmSession.value?.streamingMessageId === msgId
 }
+
+// ── 대화 초기화 (Redmine #24, DS-60 §3.2 clear_session_messages) ─
+// running/booting 상태에서는 SESSION_BUSY 가드에 걸리므로 버튼을 비활성화한다.
+const showClearConfirm = ref(false)
+const isClearing = ref(false)
+
+const canClear = computed(() =>
+  !!pmSession.value?.sessionId &&
+  messages.value.length > 0 &&
+  pmStatus.value !== 'running' &&
+  pmStatus.value !== 'booting',
+)
+
+function openClearConfirm() {
+  if (!canClear.value) return
+  showClearConfirm.value = true
+}
+
+async function confirmClear() {
+  const sessionId = pmSession.value?.sessionId
+  if (!sessionId) {
+    showClearConfirm.value = false
+    return
+  }
+  isClearing.value = true
+  try {
+    // 실제 store 반영은 agent:messages_cleared 이벤트 구독(WorkspaceView → roleStore.applyMessagesCleared)에서 수행한다
+    const result = await clearSessionMessages(sessionId)
+    showToast(`대화가 초기화되었습니다 (${result.cleared_count}건 삭제)`, 'ok')
+  } catch (e) {
+    showToast(`대화 초기화 실패: ${String(e)}`, 'error')
+  } finally {
+    isClearing.value = false
+    showClearConfirm.value = false
+  }
+}
 </script>
 
 <template>
@@ -118,6 +156,12 @@ function isStreamingMsg(msgId: string) {
       </div>
       <div class="header-right">
         <StatusBadge :state="pmStatus" size="sm" />
+        <button
+          class="icon-btn"
+          title="대화 초기화"
+          :disabled="!canClear"
+          @click="openClearConfirm"
+        >🗑</button>
       </div>
     </div>
 
@@ -201,6 +245,25 @@ function isStreamingMsg(msgId: string) {
         </button>
       </div>
     </div>
+
+    <!-- 대화 초기화 확인 다이얼로그 (Redmine #24) -->
+    <AppModal
+      v-if="showClearConfirm"
+      title="대화 초기화"
+      width="380px"
+      @close="showClearConfirm = false"
+    >
+      <p class="confirm-text">
+        {{ projectStore.pmConfig?.name ?? 'PM' }}과의 대화 히스토리를 전부 삭제합니다.
+        삭제된 대화는 복구할 수 없습니다. 계속하시겠습니까?
+      </p>
+      <template #footer>
+        <button class="btn btn-ghost" :disabled="isClearing" @click="showClearConfirm = false">취소</button>
+        <button class="btn btn-danger" :disabled="isClearing" @click="confirmClear">
+          {{ isClearing ? '초기화 중…' : '초기화' }}
+        </button>
+      </template>
+    </AppModal>
   </div>
 </template>
 
@@ -449,4 +512,40 @@ function isStreamingMsg(msgId: string) {
 
 .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .send-btn:not(:disabled):hover { opacity: 0.85; }
+
+/* ── 대화 초기화 (헤더 아이콘 버튼) ── */
+.icon-btn {
+  width: 22px; height: 22px;
+  border: 1px solid var(--line);
+  background: transparent;
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  transition: all 0.12s;
+}
+
+.icon-btn:hover:not(:disabled) {
+  border-color: #7c3aed;
+  color: #7c3aed;
+  background: rgba(124,58,237,0.08);
+}
+
+.icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── 대화 초기화 확인 다이얼로그 ── */
+.confirm-text {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.btn { height: 34px; padding: 0 14px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid var(--line); }
+.btn-ghost { background: var(--bg-panel-2); color: var(--text-primary); }
+.btn-danger { background: #dc2626; color: #fff; border: none; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>

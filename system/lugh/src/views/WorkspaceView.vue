@@ -71,6 +71,10 @@ onMounted(async () => {
       const session = roleStore.getSessionBySessionId(p.session_id)
       if (session) roleStore.failStreaming(session.role)
     },
+    onMessagesCleared(p) {
+      // Redmine #24: 대화 초기화 — 세션·페르소나는 유지, 메시지 로그만 비운다 (DS-60 §5.3)
+      roleStore.applyMessagesCleared(p)
+    },
   })
 
   unlistenDoc = await listenDocumentEvents((_p) => {

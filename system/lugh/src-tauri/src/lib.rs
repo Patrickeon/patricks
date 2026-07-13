@@ -18,8 +18,8 @@ use app_state::AppState;
 use tauri::Manager;
 use commands::{
     agent::{
-        boot_role, boot_team, get_agent_session, list_agent_messages, prepare_chat_attachment,
-        send_agent_message, stop_role,
+        boot_role, boot_team, clear_session_messages, get_agent_session, list_agent_messages,
+        prepare_chat_attachment, send_agent_message, stop_role,
     },
     browser::{
         browser_open, browser_navigate, browser_close,
@@ -92,6 +92,7 @@ pub fn run() {
             prepare_chat_attachment,
             get_agent_session,
             list_agent_messages,
+            clear_session_messages,
             // Persona
             build_persona_bundle,
             // Document

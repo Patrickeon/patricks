@@ -24,7 +24,7 @@ use crate::{
         },
         session::{
             AgentLifecycleState, AgentSession, AgentSessionDetail, AgentSessionSummary,
-            AgentStatusChanged, BootTeamResult, MessageAck,
+            AgentStatusChanged, BootTeamResult, ClearSessionResult, MessageAck,
         },
         workspace::AgiteamConfig,
     },
@@ -549,12 +549,7 @@ impl AgentSessionService {
     // ---- 세션 조회 ----
 
     pub fn get_session(&self, session_id: &str) -> AppResult<AgentSession> {
-        self.sessions
-            .read()
-            .unwrap()
-            .get(session_id)
-            .cloned()
-            .ok_or_else(|| AppError::new("SESSION_NOT_FOUND", format!("세션 {} 없음", session_id)))
+        lookup_session(&self.sessions, session_id)
     }
 
     pub fn get_session_detail(&self, session_id: &str) -> AppResult<AgentSessionDetail> {
@@ -609,6 +604,33 @@ impl AgentSessionService {
         let from = session.state.clone();
         self.transition_state(session_id, &session.role, from, AgentLifecycleState::Idle, Some("stop_role 호출".to_string()));
         Ok(())
+    }
+
+    // ---- 대화 초기화 (역할별 대화 초기화, DS-60 §3.2, Redmine #24) ----
+
+    /// 세션의 대화 히스토리(user/assistant 메시지)를 전부 삭제한다.
+    /// 세션 자체(lifecycle 상태·persona_hash 등 `AgentSession` 메타)는 변경하지 않는다.
+    ///
+    /// **페르소나 자동 유지**: 페르소나(system_prompt)는 `MessageStore`에 저장되지 않는다.
+    /// `send_message`는 매 전송마다 `PersonaBundleService::build`로 persona bundle을
+    /// 재생성해 주입한다(위 `send_message` 본문 "persona bundle 재생성" 참조). 즉 히스토리
+    /// 삭제 경로와 페르소나 주입 경로가 완전히 분리되어 있어, 초기화 직후 첫 전송부터
+    /// 페르소나가 그대로 적용되고 별도 재주입 로직·재부팅이 필요 없다.
+    ///
+    /// 세션이 `running`/`booting` 상태이면 삭제하지 않고 `SESSION_BUSY`를 반환한다 —
+    /// 진행 중인 streaming이 완료되면서 assistant 메시지가 다시 write되어 "user 없는
+    /// assistant" 불일치가 생기는 것을 방지한다. `idle`·`ready`·`failed`에서만 허용한다.
+    pub fn clear_session_messages(&self, session_id: &str) -> AppResult<ClearSessionResult> {
+        let session = lookup_session(&self.sessions, session_id)?;
+        guard_not_busy(session_id, &session.state)?;
+
+        let cleared_count = take_and_clear(&self.messages, session_id);
+
+        Ok(ClearSessionResult {
+            session_id: session_id.to_string(),
+            cleared_count,
+            cleared_at: Utc::now(),
+        })
     }
 
     // ---- 내부 헬퍼 ----
@@ -681,6 +703,43 @@ impl AgentSessionService {
             .cloned()
             .unwrap_or_default()
     }
+}
+
+// ---- 모듈 레벨 순수 헬퍼 (AppHandle 불필요 — 단위 테스트 대상, Redmine #24) ----
+// AgentSessionService는 tauri::AppHandle 필드를 가지고 있어 단위 테스트에서 인스턴스화하기
+// 어렵다(모킹하려면 Runtime 제네릭화가 필요). 상태 판정·저장소 조작 로직은 AppHandle과
+// 무관하므로 free function으로 분리해 AppHandle 없이 직접 검증한다.
+
+/// 세션 조회 (session_id → AgentSession), 없으면 SESSION_NOT_FOUND (DS-60 §9)
+fn lookup_session(
+    sessions: &Arc<RwLock<HashMap<String, AgentSession>>>,
+    session_id: &str,
+) -> AppResult<AgentSession> {
+    sessions
+        .read()
+        .unwrap()
+        .get(session_id)
+        .cloned()
+        .ok_or_else(|| AppError::new("SESSION_NOT_FOUND", format!("세션 {} 없음", session_id)))
+}
+
+/// 대화 초기화 허용 여부 판정 (DS-60 §3.2 clear_session_messages, Redmine #24)
+/// running/booting 상태면 SESSION_BUSY로 거절, 그 외(idle/ready/failed)는 허용한다.
+fn guard_not_busy(session_id: &str, state: &AgentLifecycleState) -> AppResult<()> {
+    match state {
+        AgentLifecycleState::Running | AgentLifecycleState::Booting => {
+            Err(AppError::session_busy(session_id))
+        }
+        _ => Ok(()),
+    }
+}
+
+/// 세션의 메시지 벡터를 비우고 삭제 전 건수를 반환한다 (DS-60 §3.2, Redmine #24)
+fn take_and_clear(store: &MessageStore, session_id: &str) -> u32 {
+    let mut guard = store.write().unwrap();
+    let cleared_count = guard.get(session_id).map(|v| v.len() as u32).unwrap_or(0);
+    guard.insert(session_id.to_string(), Vec::new());
+    cleared_count
 }
 
 #[cfg(test)]
@@ -768,5 +827,143 @@ mod tests {
         assert_eq!(session.state, AgentLifecycleState::Failed);
         assert!(session.failure_reason.is_some());
         assert!(session.failure_reason.unwrap().contains("persona"));
+    }
+
+    // ---- Redmine #24: 역할별 대화 초기화 (clear_session_messages) ----
+
+    #[test]
+    fn test_guard_not_busy_rejects_running_and_booting() {
+        let e1 = guard_not_busy("s1", &AgentLifecycleState::Running).unwrap_err();
+        assert_eq!(e1.code, "SESSION_BUSY");
+        assert!(e1.recoverable);
+
+        let e2 = guard_not_busy("s1", &AgentLifecycleState::Booting).unwrap_err();
+        assert_eq!(e2.code, "SESSION_BUSY");
+    }
+
+    #[test]
+    fn test_guard_not_busy_allows_idle_ready_failed() {
+        assert!(guard_not_busy("s1", &AgentLifecycleState::Idle).is_ok());
+        assert!(guard_not_busy("s1", &AgentLifecycleState::Ready).is_ok());
+        assert!(guard_not_busy("s1", &AgentLifecycleState::Failed).is_ok());
+    }
+
+    #[test]
+    fn test_lookup_session_not_found() {
+        let sessions: Arc<RwLock<HashMap<String, AgentSession>>> =
+            Arc::new(RwLock::new(HashMap::new()));
+        let e = lookup_session(&sessions, "missing-session").unwrap_err();
+        assert_eq!(e.code, "SESSION_NOT_FOUND");
+    }
+
+    #[test]
+    fn test_lookup_session_found() {
+        let sessions: Arc<RwLock<HashMap<String, AgentSession>>> =
+            Arc::new(RwLock::new(HashMap::new()));
+        let session = AgentSession {
+            id: "s1".into(),
+            workspace_id: "ws1".into(),
+            role: "DeveloperBE".into(),
+            display_name: "박개발".into(),
+            provider: AiProviderKind::Claude,
+            state: AgentLifecycleState::Ready,
+            persona_hash: "hash-abc".into(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            failure_reason: None,
+        };
+        sessions.write().unwrap().insert("s1".into(), session);
+        let found = lookup_session(&sessions, "s1").unwrap();
+        assert_eq!(found.persona_hash, "hash-abc");
+    }
+
+    #[test]
+    fn test_take_and_clear_returns_previous_count_and_empties() {
+        let store: MessageStore = Arc::new(RwLock::new(HashMap::new()));
+        let msgs = vec![
+            AgentMessage {
+                id: "m1".into(),
+                session_id: "s1".into(),
+                role: MessageRole::User,
+                content: "안녕".into(),
+                created_at: Utc::now(),
+                usage: None,
+                is_streaming: false,
+            },
+            AgentMessage {
+                id: "m2".into(),
+                session_id: "s1".into(),
+                role: MessageRole::Assistant,
+                content: "안녕하세요".into(),
+                created_at: Utc::now(),
+                usage: None,
+                is_streaming: false,
+            },
+        ];
+        store.write().unwrap().insert("s1".into(), msgs);
+
+        let cleared = take_and_clear(&store, "s1");
+        assert_eq!(cleared, 2, "삭제 전 메시지 수(2건)를 반환해야 함");
+        assert!(
+            store.read().unwrap().get("s1").unwrap().is_empty(),
+            "clear 후 메시지 벡터가 비어야 함"
+        );
+    }
+
+    #[test]
+    fn test_take_and_clear_empty_session_returns_zero() {
+        let store: MessageStore = Arc::new(RwLock::new(HashMap::new()));
+        let cleared = take_and_clear(&store, "no-messages-session");
+        assert_eq!(cleared, 0);
+    }
+
+    #[test]
+    fn test_clear_session_messages_does_not_touch_session_metadata() {
+        // "페르소나 유지" 설계 근거의 구조적 검증: clear_session_messages는 messages
+        // 저장소만 조작하고, persona_hash를 포함한 세션 메타(sessions HashMap)는 완전히
+        // 별도 저장소라 이 경로가 절대 건드리지 않는다. 실제 페르소나 재주입은
+        // send_message가 매 전송마다 PersonaBundleService로 수행한다(클래스 doc 참조).
+        let sessions: Arc<RwLock<HashMap<String, AgentSession>>> =
+            Arc::new(RwLock::new(HashMap::new()));
+        let session = AgentSession {
+            id: "s1".into(),
+            workspace_id: "ws1".into(),
+            role: "DeveloperBE".into(),
+            display_name: "박개발".into(),
+            provider: AiProviderKind::Claude,
+            state: AgentLifecycleState::Ready,
+            persona_hash: "hash-before-clear".into(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            failure_reason: None,
+        };
+        sessions.write().unwrap().insert("s1".into(), session);
+
+        let store: MessageStore = Arc::new(RwLock::new(HashMap::new()));
+        store.write().unwrap().insert(
+            "s1".into(),
+            vec![AgentMessage {
+                id: "m1".into(),
+                session_id: "s1".into(),
+                role: MessageRole::User,
+                content: "히스토리".into(),
+                created_at: Utc::now(),
+                usage: None,
+                is_streaming: false,
+            }],
+        );
+
+        // clear_session_messages 본체와 동일한 순서로 순수 헬퍼를 조합 실행
+        let before = lookup_session(&sessions, "s1").unwrap();
+        guard_not_busy("s1", &before.state).unwrap();
+        let cleared_count = take_and_clear(&store, "s1");
+
+        assert_eq!(cleared_count, 1);
+        let after = lookup_session(&sessions, "s1").unwrap();
+        assert_eq!(
+            after.persona_hash, "hash-before-clear",
+            "clear 후에도 persona_hash(세션 메타)는 그대로 유지되어야 함"
+        );
+        assert_eq!(after.state, AgentLifecycleState::Ready);
     }
 }

@@ -74,6 +74,16 @@ impl AppError {
             .recoverable()
     }
 
+    /// 세션이 running/booting 중일 때 대화 초기화(clear_session_messages) 시도 시 반환
+    /// (DS-60 §3.2, §9, Redmine #24)
+    pub fn session_busy(session_id: impl std::fmt::Display) -> Self {
+        Self::new(
+            "SESSION_BUSY",
+            format!("세션 {}이(가) 처리 중입니다(running/booting) — 응답 완료·중지 후 재시도하세요", session_id),
+        )
+        .recoverable()
+    }
+
     pub fn stream_interrupted() -> Self {
         Self::new("STREAM_INTERRUPTED", "streaming이 중단되었습니다").recoverable()
     }

@@ -9,6 +9,7 @@ import type {
   AgentMessageCompleted,
   AgentMessageFailed,
   AgentToolRequested,
+  AgentMessagesCleared,
   DocumentChanged,
   WorkspaceSummary,
   ValidationReport,
@@ -25,6 +26,7 @@ export async function listenAgentEvents(handlers: {
   onMessageCompleted?: (p: AgentMessageCompleted) => void
   onMessageFailed?: (p: AgentMessageFailed) => void
   onToolRequested?: (p: AgentToolRequested) => void
+  onMessagesCleared?: (p: AgentMessagesCleared) => void
 }): Promise<Unlistener> {
   const unlisteners: Unlistener[] = []
 
@@ -73,6 +75,14 @@ export async function listenAgentEvents(handlers: {
       await listen<AgentToolRequested>(
         'agent:tool_requested',
         (e) => handlers.onToolRequested!(e.payload),
+      ),
+    )
+  }
+  if (handlers.onMessagesCleared) {
+    unlisteners.push(
+      await listen<AgentMessagesCleared>(
+        'agent:messages_cleared',
+        (e) => handlers.onMessagesCleared!(e.payload),
       ),
     )
   }

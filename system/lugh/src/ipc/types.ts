@@ -123,6 +123,13 @@ export type MessagePage = {
   next_cursor?: string
 }
 
+// clear_session_messages Response (Redmine #24, DS-60 §3.2)
+export type ClearSessionResult = {
+  session_id: string
+  cleared_count: number   // 삭제된 메시지 건수
+  cleared_at: string      // RFC3339 UTC
+}
+
 export type AgentMessage = {
   id: string
   session_id: string
@@ -300,6 +307,13 @@ export type AgentToolRequested = {
   session_id: string
   tool_name: string
   requires_approval: boolean
+}
+
+// agent:messages_cleared 이벤트 payload (Redmine #24, DS-60 §5.2)
+export type AgentMessagesCleared = {
+  session_id: string
+  cleared_count: number
+  cleared_at: string
 }
 
 export type DocumentChanged = {

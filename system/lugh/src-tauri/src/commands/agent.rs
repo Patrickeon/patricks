@@ -14,8 +14,8 @@ use crate::{
         },
         error::AppError,
         session::{
-            AgentLifecycleState, AgentSessionDetail, BootTeamResult, AgentSessionSummary,
-            MessageAck, CommandResult,
+            AgentLifecycleState, AgentMessagesCleared, AgentSessionDetail, BootTeamResult,
+            AgentSessionSummary, ClearSessionResult, MessageAck, CommandResult,
         },
         message::MessagePage,
     },
@@ -183,4 +183,31 @@ pub async fn list_agent_messages(
     let svc = state.session_service(&workspace_id)?;
     let limit = limit.unwrap_or(50) as usize;
     svc.list_messages(&session_id, cursor.as_deref(), limit)
+}
+
+/// 지정 세션의 대화 히스토리를 전부 삭제한다 (역할별 대화 초기화, DS-60 §3.2, Redmine #24)
+/// 세션 자체(lifecycle 상태·provider·persona_hash 등)와 페르소나 주입은 유지된다 —
+/// 초기화 직후 첫 전송부터 send_message가 페르소나를 재주입하므로 별도 재부팅이 필요 없다.
+/// 세션이 running/booting 중이면 SESSION_BUSY로 거절된다.
+/// 성공 시 agent:messages_cleared 이벤트를 emit한다.
+#[tauri::command]
+pub async fn clear_session_messages(
+    session_id: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<ClearSessionResult, AppError> {
+    let workspace_id = state.get_workspace_id_for_session(&session_id)?;
+    let svc = state.session_service(&workspace_id)?;
+    let result = svc.clear_session_messages(&session_id)?;
+
+    let _ = app.emit(
+        "agent:messages_cleared",
+        AgentMessagesCleared {
+            session_id: result.session_id.clone(),
+            cleared_count: result.cleared_count,
+            cleared_at: result.cleared_at,
+        },
+    );
+
+    Ok(result)
 }
