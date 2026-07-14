@@ -2,14 +2,18 @@ name: E2E Linux Smoke
 
 on:
   workflow_dispatch: {}
-  # 안정화 확인 후 PM 승인 시 활성화 예정 (레드마인 #22 조사 보고서 §3.5 Phase 1 참조):
-  # pull_request:
-  #   paths:
-  #     - 'system/lugh/**'
-  # push:
-  #   branches: [main]
-  #   paths:
-  #     - 'system/lugh/**'
+  # 자동 회귀 검증 활성화 (레드마인 #22 조사 보고서 §3.5 Phase 1, run 29347217800 4/4 통과로 안정성 입증).
+  # 비용 완화: paths 필터로 앱 소스(system/lugh/**) 또는 본 워크플로우가 바뀔 때만 실행 —
+  # 문서/타 시스템만 변경된 push·PR에서는 skip.
+  pull_request:
+    paths:
+      - 'system/lugh/**'
+      - '.github/workflows/e2e-linux.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'system/lugh/**'
+      - '.github/workflows/e2e-linux.yml'
 
 permissions:
   contents: read
