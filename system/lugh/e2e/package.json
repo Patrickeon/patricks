@@ -1,0 +1,18 @@
+{
+  "name": "lugh-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "lugh Tauri v2 앱 E2E 스모크 테스트 (WebdriverIO + tauri-driver). 앱 본체 빌드/의존성과 격리된 별도 프로젝트.",
+  "scripts": {
+    "test": "wdio run wdio.conf.js"
+  },
+  "dependencies": {
+    "@wdio/cli": "^9.19.0"
+  },
+  "devDependencies": {
+    "@wdio/local-runner": "^9.19.0",
+    "@wdio/mocha-framework": "^9.19.0",
+    "@wdio/spec-reporter": "^9.19.0"
+  }
+}

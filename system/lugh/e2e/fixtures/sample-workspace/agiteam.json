@@ -1,0 +1,28 @@
+{
+  "project": {
+    "name": "e2e-sample",
+    "displayName": "E2E Sample Workspace",
+    "workspace": {
+      "name": "E2E팀",
+      "color": "Indigo"
+    }
+  },
+  "persona": {
+    "dir": "brain",
+    "commonFile": "brain/Shared/persona.md"
+  },
+  "team": [],
+  "pm": {
+    "name": "테스트PM",
+    "agent": "claude",
+    "command": "true",
+    "startupFiles": [],
+    "startupMessage": "E2E 스모크 테스트용 워크스페이스입니다. 실제 팀 부팅까지는 진행하지 않습니다."
+  },
+  "settings": {
+    "readyTimeout": 5,
+    "postLaunchDelay": 1,
+    "readySignalTimeout": 5,
+    "maxAutoSubmits": 1
+  }
+}

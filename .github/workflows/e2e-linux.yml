@@ -1,0 +1,86 @@
+name: E2E Linux Smoke
+
+on:
+  workflow_dispatch: {}
+  # 안정화 확인 후 PM 승인 시 활성화 예정 (레드마인 #22 조사 보고서 §3.5 Phase 1 참조):
+  # pull_request:
+  #   paths:
+  #     - 'system/lugh/**'
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'system/lugh/**'
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-linux:
+    name: WebdriverIO Smoke (Linux headless)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: system/lugh
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Tauri 컴파일 의존성 + tauri-driver 구동에 필요한 webkit2gtk-driver, 헤드리스용 xvfb
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libxdo-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            webkit2gtk-driver \
+            xvfb
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.7.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: system/lugh/pnpm-lock.yaml
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: system/lugh/src-tauri
+
+      - name: Install app frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 깨진 앱을 대상으로 E2E를 돌리지 않도록 Rust 단위테스트를 선행 (공식 CI 가이드 권고)
+      - name: Cargo test
+        run: cargo test
+        working-directory: system/lugh/src-tauri
+
+      - name: Install tauri-driver
+        run: cargo install tauri-driver --locked
+
+      - name: Install E2E test dependencies (isolated e2e/ project)
+        run: pnpm install --frozen-lockfile
+        working-directory: system/lugh/e2e
+
+      # onPrepare 훅에서 `tauri build --debug --no-bundle`로 앱을 먼저 빌드한 뒤
+      # xvfb-run으로 가상 디스플레이를 만들어 헤드리스로 WebdriverIO 스모크를 실행한다
+      - name: Run E2E smoke (headless via xvfb)
+        run: xvfb-run --auto-servernum pnpm test
+        working-directory: system/lugh/e2e
