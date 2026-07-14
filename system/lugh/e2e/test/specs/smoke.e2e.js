@@ -35,7 +35,7 @@ describe('① 앱 부팅 스모크', () => {
   it('앱 버전이 표시된다 (Tauri core IPC 브리지 확인, getVersion())', async () => {
     const version = await $('.version');
     await version.waitForExist({ timeout: 10000 });
-    await expect(version).toHaveTextContaining('v');
+    await expect(version).toHaveText(expect.stringContaining('v'));
   });
 });
 
@@ -66,6 +66,6 @@ describe('② 워크스페이스 열기·검증 스모크', () => {
     // team: [] 픽스처이므로 PM 1명만 roleStates에 반영된다 → "0/1 READY 수신"
     const readyCounter = await $('.ready-counter');
     await readyCounter.waitForExist({ timeout: 5000 });
-    await expect(readyCounter).toHaveTextContaining('0/1');
+    await expect(readyCounter).toHaveText(expect.stringContaining('0/1'));
   });
 });
