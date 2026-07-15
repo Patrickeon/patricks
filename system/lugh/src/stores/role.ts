@@ -167,6 +167,13 @@ export const useRoleStore = defineStore('role', () => {
     if (s) s.messages = []
   }
 
+  // 전체 세션 일괄 초기화 (Redmine #27, DS-10 §8.3 / DS-60 §6.3)
+  // 프로젝트 전환·닫기 시 이전 프로젝트의 역할 세션·대화·상태 잔존을 방지한다.
+  // (세션 자체 종료는 stop_role IPC로 선행하고, 여기서는 FE 상태만 비운다.)
+  function reset() {
+    sessions.value.clear()
+  }
+
   // agent:messages_cleared 이벤트 반영 (Redmine #24, DS-60 §5.3)
   // session_id 기준으로 세션을 찾아 메시지 로그·스트리밍 상태를 비운다.
   // 같은 세션이 여러 패널/최대화 뷰에 렌더링되어도 store가 단일 진실 공급원이므로 동기 반영된다.
@@ -196,5 +203,6 @@ export const useRoleStore = defineStore('role', () => {
     getSessionBySessionId,
     clearMessages,
     applyMessagesCleared,
+    reset,
   }
 })

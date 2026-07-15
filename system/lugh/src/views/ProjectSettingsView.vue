@@ -1,6 +1,6 @@
 <!-- Screen-02: 프로젝트 설정 (DS-50 §3) -->
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useProjectStore } from '@/stores/project'
 import { openWorkspace, saveWorkspaceConfig } from '@/ipc/workspace'
@@ -15,6 +15,28 @@ type ActiveTab = 'basic' | 'pm' | 'team' | 'timing' | 'persona'
 const activeTab = ref<ActiveTab>('basic')
 const isSaving = ref(false)
 const saveError = ref<string | null>(null)
+
+// ── #27: 신규 작성(mode=new) 워크스페이스 폴더 ──────────────
+// dialog 폴백으로 경로 없이 진입했을 때 여기서 폴더를 지정할 수 있게 한다.
+// 경로 미설정 시 저장/부팅을 막아 "메모리에만 저장" 반복 토스트를 방지한다.
+const isNewMode = computed(() => route.query.mode === 'new')
+const workspacePath = ref<string>((route.query.path as string) ?? '')
+// 신규 작성인데 워크스페이스 경로가 없으면 디스크에 프로젝트를 세울 수 없다 → 저장/부팅 비활성
+const needsWorkspacePath = computed(
+  () => isNewMode.value && !projectStore.workspaceId && !workspacePath.value.trim(),
+)
+
+async function selectWorkspaceFolder() {
+  try {
+    const { open: dialogOpen } = await import('@tauri-apps/plugin-dialog')
+    const selected = await dialogOpen({ directory: true, multiple: false })
+    if (selected && typeof selected === 'string') workspacePath.value = selected
+  } catch (e) {
+    // dialog 실패 시에도 필드에 직접 입력할 수 있으므로 안내만 남긴다 (silent swallow 금지)
+    console.error('[settings] workspace folder dialog failed:', e)
+    showToast('폴더 선택 창을 열 수 없습니다. 경로를 직접 입력해주세요', 'warn')
+  }
+}
 
 // ── 폼 데이터 (agiteam.json 구조 그대로) ─────────────────
 const form = ref<AgiteamConfig>({
@@ -123,19 +145,21 @@ async function save() {
       // 기존 워크스페이스 파일 저장
       await saveWorkspaceConfig(projectStore.workspaceId, form.value)
       showToast('설정이 저장되었습니다', 'ok')
-    } else if (route.query.path) {
-      // #13 fix: 신규 프로젝트 + 경로 있음
+    } else if (workspacePath.value.trim()) {
+      // #13/#27: 신규 프로젝트 + 워크스페이스 경로 지정됨
       // 1) openWorkspace 로 workspace_id 확보 (agiteam.json 미존재 허용)
       // 2) saveWorkspaceConfig 로 agiteam.json 디스크 생성
       // 3) projectStore.load 로 store 완전 반영 + recentProjects 등록
-      const wsPath = route.query.path as string
+      const wsPath = workspacePath.value.trim()
       const summary = await openWorkspace(wsPath)
       await saveWorkspaceConfig(summary.workspace_id, form.value)
       await projectStore.load(wsPath)
       showToast('프로젝트가 생성되었습니다', 'ok')
     } else {
-      // 경로 없음 — 메모리 저장만 (폴백)
-      showToast('메모리에만 저장되었습니다 (워크스페이스 경로를 선택해주세요)', 'info')
+      // #27: 경로 없음 — 저장/부팅 버튼이 비활성이므로 여기 도달하지 않아야 한다(방어).
+      //      "메모리에만 저장" 반복 토스트 대신 다음 행동을 안내한다.
+      showToast('워크스페이스 폴더를 먼저 선택해주세요', 'warn')
+      return
     }
   } catch (e) {
     saveError.value = String(e)
@@ -195,6 +219,21 @@ const tabs: { id: ActiveTab; label: string }[] = [
 
         <!-- ── 탭1: 기본 정보 ── -->
         <div v-if="activeTab === 'basic'" class="form-section">
+          <!-- #27: 신규 작성 시 워크스페이스 폴더 지정 (경로 미설정 시 저장/부팅 비활성) -->
+          <div v-if="isNewMode" class="field">
+            <label class="field-label">워크스페이스 폴더 <span class="req">*</span></label>
+            <div class="folder-row">
+              <input
+                v-model="workspacePath"
+                class="input folder-input"
+                placeholder="/Users/yourname/Projects/myproject"
+              />
+              <button type="button" class="folder-btn" @click="selectWorkspaceFolder">폴더 선택…</button>
+            </div>
+            <p v-if="needsWorkspacePath" class="folder-hint">
+              프로젝트를 디스크에 저장하려면 워크스페이스 폴더가 필요합니다.
+            </p>
+          </div>
           <div class="field">
             <label class="field-label">프로젝트 이름 (내부)</label>
             <input v-model="form.project.name" class="input" placeholder="lugh" />
@@ -351,12 +390,17 @@ const tabs: { id: ActiveTab; label: string }[] = [
     <!-- 에러 -->
     <div v-if="saveError" class="error-bar">❌ {{ saveError }}</div>
 
+    <!-- #27: 경로 미설정 안내 -->
+    <div v-if="needsWorkspacePath" class="hint-bar">
+      ⓘ 워크스페이스 폴더를 선택하면 저장·부팅을 진행할 수 있습니다.
+    </div>
+
     <!-- 액션 버튼 -->
     <div class="settings-footer">
-      <button class="btn btn-ghost" @click="save" :disabled="isSaving">
+      <button class="btn btn-ghost" @click="save" :disabled="isSaving || needsWorkspacePath">
         {{ isSaving ? '저장 중…' : '저장' }}
       </button>
-      <button class="btn btn-primary" @click="saveThenBoot" :disabled="isSaving">
+      <button class="btn btn-primary" @click="saveThenBoot" :disabled="isSaving || needsWorkspacePath">
         팀 부팅 시작 →
       </button>
     </div>
@@ -576,6 +620,29 @@ h2 { font-size: 16px; font-weight: 600; color: var(--text-primary); }
 }
 
 .add-btn:hover { background: rgba(99,102,241,0.15); }
+
+/* ── #27: 워크스페이스 폴더 필드 ── */
+.req { color: var(--error); }
+.folder-row { display: flex; gap: 8px; align-items: center; }
+.folder-input { flex: 1; }
+.folder-btn {
+  height: 34px; padding: 0 12px; white-space: nowrap;
+  background: rgba(99,102,241,0.12); border: 1px solid var(--accent);
+  border-radius: 6px; color: var(--accent); font-size: 12px; font-weight: 600;
+  cursor: pointer;
+}
+.folder-btn:hover { background: rgba(99,102,241,0.22); }
+.folder-hint { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+/* ── #27: 안내 바 ── */
+.hint-bar {
+  padding: 8px 24px;
+  background: rgba(99,102,241,0.08);
+  border-top: 1px solid rgba(99,102,241,0.2);
+  color: var(--text-muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
 
 /* ── 에러 바 ── */
 .error-bar {

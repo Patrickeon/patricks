@@ -1,18 +1,36 @@
 <!-- Screen-01: 런처 / 시작 화면 (DS-50 §2) -->
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore } from '@/stores/project'
+import { openBrowser } from '@/ipc/browser'
+import { showToast } from '@/composables/toast'
+import { useProjectStatus } from '@/composables/useProjectStatus'
 import type { RecentProject } from '@/stores/project'
 
 const router = useRouter()
 const projectStore = useProjectStore()
+// #27: 프로젝트 컨텍스트 상태(none/configured/active) — 홈 안내 카피 노출 판단에 사용 (DS-10 §8.1)
+const { isNone } = useProjectStatus()
 const appVersion = ref('0.1.0')
 
-// 인라인 경로 입력 상태
+// 인라인 경로 입력 상태 (#27: newProject/openExisting 폴백 공용)
+// mode='open' → agiteam.json 파일 경로 입력, mode='new' → 새 프로젝트 폴더 경로 입력
 const showPathInput = ref(false)
+const pathInputMode = ref<'open' | 'new'>('open')
 const manualPath = ref('')
 const pathInputError = ref('')
+
+const pathInputLabel = computed(() =>
+  pathInputMode.value === 'new'
+    ? '새 프로젝트 폴더 경로 직접 입력'
+    : 'agiteam.json 경로 직접 입력',
+)
+const pathInputPlaceholder = computed(() =>
+  pathInputMode.value === 'new'
+    ? '/Users/yourname/Projects/myproject'
+    : '/Users/yourname/Projects/myproject/agiteam.json',
+)
 
 // Tauri App의 실제 버전 가져오기 (mock 폴백)
 onMounted(async () => {
@@ -65,6 +83,13 @@ async function openRecent(project: RecentProject) {
   }
 }
 
+function openManualPathInput(mode: 'open' | 'new') {
+  pathInputMode.value = mode
+  showPathInput.value = true
+  pathInputError.value = ''
+  manualPath.value = ''
+}
+
 async function newProject() {
   // #13 fix: 새 프로젝트 경로를 먼저 선택 → path 쿼리 포함하여 이동해야 persist 가능
   try {
@@ -74,9 +99,11 @@ async function newProject() {
       router.push(`/settings?mode=new&path=${encodeURIComponent(selected)}`)
     }
     // 취소 시 아무것도 하지 않음
-  } catch {
-    // tauri-plugin-dialog 미설치 환경 폴백 — 경로 없이 이동 (메모리 저장만 가능)
-    router.push('/settings?mode=new')
+  } catch (e) {
+    // #27: dialog 실패 시 openExisting과 대칭으로 인라인 폴더 경로 입력 폴백 제공
+    //      (경로 없는 mode=new 강제 이동 제거 — 막다른 길 차단)
+    console.error('[launcher] newProject folder dialog failed:', e)
+    openManualPathInput('new')
   }
 }
 
@@ -93,11 +120,10 @@ async function openExisting() {
       const dirPath = selected.replace(/[/\\][^/\\]+$/, '')
       router.push(`/settings?path=${encodeURIComponent(dirPath)}`)
     }
-  } catch {
-    // tauri-plugin-dialog 미설치 환경 — 인라인 경로 입력 UI 표시
-    showPathInput.value = true
-    pathInputError.value = ''
-    manualPath.value = ''
+  } catch (e) {
+    // #27: tauri-plugin-dialog 미설치/예외 환경 — 인라인 경로 입력 UI 표시 (silent swallow 금지)
+    console.error('[launcher] openExisting dialog failed:', e)
+    openManualPathInput('open')
   }
 }
 
@@ -107,11 +133,19 @@ async function confirmManualPath() {
     pathInputError.value = '경로를 입력해주세요'
     return
   }
+  if (pathInputMode.value === 'new') {
+    // 새 프로젝트: 입력한 폴더 경로를 path 쿼리로 실어 설정(신규 작성) 화면으로 이동
+    showPathInput.value = false
+    router.push(`/settings?mode=new&path=${encodeURIComponent(p)}`)
+    return
+  }
+  // 기존 열기: 즉시 로드 후 부팅 화면으로
   try {
     await projectStore.load(p)
     showPathInput.value = false
     router.push('/boot')
-  } catch {
+  } catch (e) {
+    console.error('[launcher] manual path load failed:', e)
     pathInputError.value = '파일을 열 수 없습니다. 경로를 확인해주세요'
   }
 }
@@ -120,6 +154,16 @@ function cancelPathInput() {
   showPathInput.value = false
   manualPath.value = ''
   pathInputError.value = ''
+}
+
+// #27: 내장 브라우저는 config 불요(독립 창, DS-60 §6.3) — none 상태(홈)에서도 열 수 있다.
+async function openEmbeddedBrowser() {
+  try {
+    await openBrowser('https://duckduckgo.com/')
+  } catch (e) {
+    console.error('[launcher] browser_open failed:', e)
+    showToast('브라우저를 열 수 없습니다', 'error')
+  }
 }
 </script>
 
@@ -169,14 +213,14 @@ function cancelPathInput() {
         <button class="btn btn-ghost" @click="openExisting">기존 열기…</button>
       </div>
 
-      <!-- 인라인 경로 입력 (dialog 플러그인 없을 때 폴백) -->
+      <!-- 인라인 경로 입력 (dialog 실패/미설치 폴백 — newProject·openExisting 공용, #27) -->
       <div v-if="showPathInput" class="path-input-section">
-        <label class="path-input-label">agiteam.json 경로 직접 입력</label>
+        <label class="path-input-label">{{ pathInputLabel }}</label>
         <div class="path-input-row">
           <input
             v-model="manualPath"
             class="path-input"
-            placeholder="/Users/yourname/Projects/myproject/agiteam.json"
+            :placeholder="pathInputPlaceholder"
             @keyup.enter="confirmManualPath"
             @keyup.escape="cancelPathInput"
             autofocus
@@ -184,14 +228,26 @@ function cancelPathInput() {
         </div>
         <p v-if="pathInputError" class="path-input-error">⚠ {{ pathInputError }}</p>
         <div class="path-input-actions">
-          <button class="btn btn-primary" style="height:32px;font-size:12px" @click="confirmManualPath">열기</button>
+          <button class="btn btn-primary" style="height:32px;font-size:12px" @click="confirmManualPath">
+            {{ pathInputMode === 'new' ? '다음' : '열기' }}
+          </button>
           <button class="btn btn-ghost" style="height:32px;font-size:12px" @click="cancelPathInput">취소</button>
         </div>
       </div>
-    </div>
 
-    <!-- 가이드 링크 -->
-    <router-link to="/guide" class="guide-link">📖 사용 가이드</router-link>
+      <!-- #27: 프로젝트 미선택(none)으로도 사용 가능한 셸 진입 영역 -->
+      <div class="shell-section">
+        <p class="shell-hint">
+          프로젝트를 선택하지 않아도 앱을 사용할 수 있어요.
+          준비되면 위에서 프로젝트를 만들거나 열어주세요.
+        </p>
+        <p v-if="isNone" class="shell-badge">프로젝트 미선택 상태</p>
+        <div class="shell-row">
+          <button class="btn btn-ghost shell-btn" @click="openEmbeddedBrowser">🌐 내장 브라우저</button>
+          <router-link to="/guide" class="btn btn-ghost shell-btn">📖 가이드</router-link>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -383,9 +439,40 @@ function cancelPathInput() {
 
 .btn-ghost:hover { border-color: var(--accent); }
 
-.guide-link {
-  position: absolute; bottom: 20px; right: 24px;
-  font-size: 12px; color: var(--text-muted); text-decoration: none;
+/* #27: 셸 진입 영역 (프로젝트 미선택으로도 가용) */
+.shell-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line-soft);
 }
-.guide-link:hover { color: var(--accent); }
+
+.shell-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.shell-badge {
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: var(--bg-panel-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.shell-row { display: flex; gap: 10px; }
+
+.shell-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
 </style>

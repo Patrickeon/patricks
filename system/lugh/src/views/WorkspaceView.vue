@@ -1,13 +1,17 @@
 <!-- Screen-04: 팀 워크스페이스 — 메인 작업 화면 (DS-50 §5) -->
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore } from '@/stores/project'
 import { useRoleStore } from '@/stores/role'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useBootStore } from '@/stores/boot'
 import { useThemeStore } from '@/stores/theme'
 import { listenAgentEvents, listenDocumentEvents } from '@/ipc/events'
+import { stopRole } from '@/ipc/agent'
+import { showToast } from '@/composables/toast'
 import { useAgentHealthPoll } from '@/composables/useAgentHealthPoll'
+import type { RecentProject } from '@/stores/project'
 import PmChatPanel from '@/components/PmChatPanel.vue'
 import RoleChatPanel from '@/components/RoleChatPanel.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
@@ -19,6 +23,7 @@ const router = useRouter()
 const projectStore = useProjectStore()
 const roleStore = useRoleStore()
 const workspaceStore = useWorkspaceStore()
+const bootStore = useBootStore()
 const themeStore = useThemeStore()
 
 // 30초 주기 에이전트 상태 폴링
@@ -142,14 +147,119 @@ function openSettings() {
   workspaceStore.openSettings()
 }
 
-function promptExit() {
+// ── #27: 프로젝트 메뉴(열기/전환/닫기) + 종료 확인 모달 분기 ──────────
+type ExitMode = 'close' | 'switch' | 'new'
+const showProjectMenu = ref(false)
+const exitMode = ref<ExitMode>('close')
+const pendingSwitchPath = ref<string | null>(null)
+
+const recentOthers = computed(() =>
+  projectStore.recentProjects
+    .filter((p) => p.path !== projectStore.workspacePath)
+    .slice(0, 5),
+)
+
+// 종료 확인 모달 문구 (앱 종료가 아닌 프로젝트 닫기/전환 의미로 분기, DS-10 §8.3)
+const exitDialog = computed(() => {
+  if (exitMode.value === 'switch' || exitMode.value === 'new') {
+    return {
+      msg: '현재 팀을 종료하고 다른 프로젝트로 전환하시겠습니까?',
+      sub: '실행 중인 모든 에이전트 세션이 닫힙니다.',
+      confirm: '전환',
+    }
+  }
+  return {
+    msg: '프로젝트를 닫고 홈으로 돌아가시겠습니까?',
+    sub: '실행 중인 모든 에이전트 세션이 닫힙니다.',
+    confirm: '닫기',
+  }
+})
+
+function toggleProjectMenu() {
+  showProjectMenu.value = !showProjectMenu.value
+}
+
+function closeProjectMenu() {
+  showProjectMenu.value = false
+}
+
+/** 종료 확인 모달을 특정 의도로 연다. */
+function requestExit(mode: ExitMode, path: string | null = null) {
+  exitMode.value = mode
+  pendingSwitchPath.value = path
+  closeProjectMenu()
   workspaceStore.promptExit()
 }
 
+// 헤더 ⏏ 버튼(팀 종료) = 프로젝트 닫기(홈으로)
+function promptExit() {
+  requestExit('close')
+}
+
+function switchToRecent(p: RecentProject) {
+  requestExit('switch', p.path)
+}
+
+async function openProjectFromMenu() {
+  try {
+    const { open: dialogOpen } = await import('@tauri-apps/plugin-dialog')
+    const selected = await dialogOpen({
+      filters: [{ name: 'agiteam.json', extensions: ['json'] }],
+      multiple: false,
+    })
+    if (selected && typeof selected === 'string') {
+      const dirPath = selected.replace(/[/\\][^/\\]+$/, '')
+      requestExit('switch', dirPath)
+    }
+  } catch (e) {
+    console.error('[workspace] openProjectFromMenu dialog failed:', e)
+    showToast('파일 선택 창을 열 수 없습니다', 'error')
+  }
+}
+
+function newProjectFromMenu() {
+  requestExit('new')
+}
+
+/** 실행 중인 모든 역할 세션을 종료한다 (DS-60 §6.3 step 1). */
+async function stopAllRoles() {
+  const targets = Array.from(roleStore.sessions.values())
+    .map((s) => s.sessionId)
+    .filter((id): id is string => !!id)
+  await Promise.allSettled(targets.map((id) => stopRole(id)))
+}
+
+// 프로젝트 전환/닫기 확정 (DS-10 §8.3 / DS-60 §6.3 세션 정리 순서)
 async function confirmExit() {
   workspaceStore.cancelExit()
+
+  // 1) 세션 종료
+  await stopAllRoles()
+
+  // 2) FE 스토어 초기화
+  projectStore.reset()
   workspaceStore.deactivate()
-  router.push('/launcher')
+  roleStore.reset()
+  bootStore.reset()
+
+  // 3) 목적지 이동
+  if (exitMode.value === 'switch' && pendingSwitchPath.value) {
+    const path = pendingSwitchPath.value
+    pendingSwitchPath.value = null
+    try {
+      await projectStore.load(path)
+      router.push('/boot')
+    } catch (e) {
+      console.error('[workspace] switch load failed:', e)
+      projectStore.removeRecentProject(path)
+      showToast('프로젝트를 열 수 없습니다. 홈으로 이동합니다', 'error')
+      router.push('/launcher')
+    }
+  } else if (exitMode.value === 'new') {
+    router.push('/settings?mode=new')
+  } else {
+    router.push('/launcher')
+  }
 }
 
 // ── 하단 상태 바 ──────────────────────────────────────────
@@ -175,10 +285,38 @@ const headerAccent = computed(() => {
   <div class="workspace-root">
     <!-- ── 헤더 바 ── -->
     <header class="ws-header" :style="{ '--ws-accent': headerAccent }">
-      <div class="ws-brand">
-        <div class="ws-mark">A</div>
-        <span class="ws-project-name">{{ projectStore.displayName || projectStore.name }}</span>
-        <span class="ws-app-name">AgiTeamBuilder Desktop</span>
+      <!-- #27: 프로젝트 메뉴 (열기/전환/닫기) -->
+      <div class="ws-brand-wrap">
+        <button class="ws-brand" title="프로젝트 메뉴" @click="toggleProjectMenu">
+          <div class="ws-mark">A</div>
+          <span class="ws-project-name">{{ projectStore.displayName || projectStore.name }}</span>
+          <span class="ws-app-name">AgiTeamBuilder Desktop</span>
+          <span class="ws-caret">▾</span>
+        </button>
+
+        <!-- 드롭다운 -->
+        <template v-if="showProjectMenu">
+          <div class="proj-menu-backdrop" @click="closeProjectMenu" />
+          <div class="proj-menu" role="menu">
+            <p class="proj-menu-label">최근 프로젝트</p>
+            <button
+              v-for="p in recentOthers"
+              :key="p.path"
+              class="proj-menu-item"
+              @click="switchToRecent(p)"
+            >
+              <span class="proj-menu-item-name">{{ p.displayName || p.name }}</span>
+              <span class="proj-menu-item-path">{{ p.path }}</span>
+            </button>
+            <p v-if="recentOthers.length === 0" class="proj-menu-empty">다른 최근 프로젝트 없음</p>
+
+            <div class="proj-menu-divider" />
+            <button class="proj-menu-item action" @click="openProjectFromMenu">📂 프로젝트 열기…</button>
+            <button class="proj-menu-item action" @click="newProjectFromMenu">＋ 새 프로젝트…</button>
+            <div class="proj-menu-divider" />
+            <button class="proj-menu-item danger" @click="promptExit">⏏ 프로젝트 닫기 (홈으로)</button>
+          </div>
+        </template>
       </div>
 
       <div class="ws-nav">
@@ -338,10 +476,10 @@ const headerAccent = computed(() => {
         @click.self="workspaceStore.cancelExit()"
       >
         <div class="confirm-box">
-          <p class="confirm-msg">팀을 종료하시겠습니까?<br><small>모든 에이전트 세션이 닫힙니다.</small></p>
+          <p class="confirm-msg">{{ exitDialog.msg }}<br><small>{{ exitDialog.sub }}</small></p>
           <div class="confirm-btns">
             <button class="btn btn-ghost" @click="workspaceStore.cancelExit()">취소</button>
-            <button class="btn btn-danger" @click="confirmExit">종료</button>
+            <button class="btn btn-danger" @click="confirmExit">{{ exitDialog.confirm }}</button>
           </div>
         </div>
       </div>
@@ -373,7 +511,86 @@ const headerAccent = computed(() => {
 
 [data-theme="light"] .ws-header { border-bottom-color: rgba(0,0,0,0.08); }
 
-.ws-brand { display: flex; align-items: center; gap: 10px; }
+.ws-brand-wrap { position: relative; }
+
+.ws-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 3px 8px 3px 4px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.ws-brand:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); }
+[data-theme="light"] .ws-brand:hover { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.10); }
+
+.ws-caret { font-size: 10px; color: #94a3b8; margin-left: 2px; }
+[data-theme="light"] .ws-caret { color: #64748b; }
+
+/* ── #27: 프로젝트 메뉴 드롭다운 ── */
+.proj-menu-backdrop { position: fixed; inset: 0; z-index: 40; }
+
+.proj-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 41;
+  min-width: 300px;
+  max-width: 380px;
+  padding: 8px;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.proj-menu-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 4px 8px;
+}
+
+.proj-menu-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  text-align: left;
+  padding: 7px 8px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.proj-menu-item:hover { background: rgba(99,102,241,0.1); }
+.proj-menu-item.action { flex-direction: row; align-items: center; font-weight: 500; }
+.proj-menu-item.danger { color: var(--error); }
+.proj-menu-item.danger:hover { background: rgba(239,68,68,0.1); }
+
+.proj-menu-item-name { font-size: 13px; font-weight: 500; }
+.proj-menu-item-path {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.proj-menu-empty { font-size: 12px; color: var(--text-muted); padding: 6px 8px; }
+
+.proj-menu-divider { height: 1px; background: var(--line-soft); margin: 6px 4px; }
 
 .ws-mark {
   width: 30px; height: 30px;

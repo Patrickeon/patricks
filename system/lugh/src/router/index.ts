@@ -1,7 +1,6 @@
 // DS-10 §3 Vue Router 라우트 정의 + DS-10 §4 접근 제어 가드
 import { createRouter, createWebHistory } from 'vue-router'
 import { useProjectStore } from '@/stores/project'
-import { useBootStore } from '@/stores/boot'
 import { useWorkspaceStore } from '@/stores/workspace'
 
 const router = createRouter({
@@ -67,19 +66,20 @@ const router = createRouter({
 // ── 네비게이션 가드 (DS-10 §4) ────────────────────────────
 router.beforeEach((to) => {
   const projectStore = useProjectStore()
-  const bootStore = useBootStore()
   const workspaceStore = useWorkspaceStore()
 
-  // /boot: agiteam.json 로드 필요
+  // /boot: agiteam.json 로드 필요 (DS-10 §4)
+  // #27 완화: config 미충족 시 /settings 강제(무한 루프 원인) 제거 → 홈(/launcher)으로 안전 복귀
   if (to.meta.requiresConfig && !projectStore.config) {
-    return { name: 'settings' }
+    return { name: 'launcher' }
   }
 
-  // /workspace: 부팅 완료 필요
+  // /workspace: 부팅 완료(active) 필요 (DS-10 §4)
+  // #27 완화: 미충족 시 config 있으면 /boot(부팅 재개), 없으면 홈(/launcher).
+  //   활성화 직전(isDone && !isActive) 찰나에 /boot로 보내도 BootView watch가
+  //   즉시 /workspace로 재이동시키므로 안전하다.
   if (to.meta.requiresBoot && !workspaceStore.isActive) {
-    if (!bootStore.isDone) {
-      return { name: 'boot' }
-    }
+    return projectStore.config ? { name: 'boot' } : { name: 'launcher' }
   }
 
   return true
