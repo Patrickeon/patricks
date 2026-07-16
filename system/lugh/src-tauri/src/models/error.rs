@@ -88,6 +88,13 @@ impl AppError {
         Self::new("STREAM_INTERRUPTED", "streaming이 중단되었습니다").recoverable()
     }
 
+    /// 웹 URL fetch 시 SSRF/내부망 차단 등 정책 위반으로 접근이 거부됨
+    /// (DS-40 §10.7, DS-60 §9, Redmine #29). 정책 차단이므로 recoverable=false
+    /// (동일 URL 재시도가 아니라 다른 URL로 수정해야 함).
+    pub fn url_blocked(reason: impl std::fmt::Display) -> Self {
+        Self::new("URL_BLOCKED", format!("URL 접근이 차단되었습니다: {}", reason))
+    }
+
     pub fn document_write_failed(msg: impl Into<String>) -> Self {
         Self::new("DOCUMENT_WRITE_FAILED", msg)
     }

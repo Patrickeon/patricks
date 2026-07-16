@@ -1,6 +1,6 @@
 ---
 doc: DS-40_API명세서
-version: v0.12
+version: v0.13
 last_updated: 2026-07-16
 status: draft
 author: Architect
@@ -24,6 +24,7 @@ author: Architect
 | v0.10 | 2026-07-12 | Architect | Redmine #23 **Claude OAuth/CLI 이미지 vision 지원 구현 완료 현행화**: §7.3 provider capability 표의 `Claude CLI/OAuth shell provider` 행을 'MVP 이미지 미지원 → `ATTACHMENT_UNSUPPORTED`'에서 'stream-json content 배열로 이미지 base64 전달(Anthropic Messages 스키마, #23), vision 미지원 모델만 `ATTACHMENT_UNSUPPORTED`'로 갱신. `claude_cli` `supports_vision=true` 반영 |
 | v0.11 | 2026-07-16 | Architect | Redmine #29 **AI 에이전트 웹검색 연동 설계**(초안): §10.6 웹 콘텐츠 연동 트리거 방식(결정적 pre-fetch 주입 MVP vs tool-use 루프) 및 프롬프트 주입 규격(`DocumentText` content block 재사용) 신설, §10.7 **SSRF/내부망 차단 보안 정책**(loopback·link-local·사설대역·사내 레드마인 기본 차단, redirect 재검증, Content-Type 제한) 신설, §10.8 MVP 범위·단계 신설, §7.3에 provider별 tool-use 배선 현황 각주 추가. 코드 변경 없음(설계). DS-60 v0.16과 교차 정합 |
 | v0.12 | 2026-07-16 | Architect | Redmine #29 **PM 결정 확정 반영**: (1) 트리거 **(b) 유저 명시 방식만 MVP**(자동감지는 후속), (2) 주입 **`DocumentText` 재사용 확정**, (3) 내부망/localhost **전면 차단 확정**, (4) **`AttachmentKind` = `Document` 재사용**(`Web` 신설 안 함), (5) tool-use 루프 **Phase 2(이번 범위 밖)**. §10.6 트리거 표·결론, §10.8 MVP 범위를 확정 문구로 정리. DS-60 v0.17과 교차 정합 |
+| v0.13 | 2026-07-16 | Architect | Redmine #29 **BE 구현 완료 현행화**(박개발, `commands/web.rs`·`error.rs`, cargo test 114/0 PASS): §10.3 `FetchedPage`에 **`truncated: boolean` 필드 추가**, §10.4에 **`URL_BLOCKED` 오류코드 추가**, §10.5 제약을 현행 기준으로 갱신, §10.6~10.8을 '설계'에서 **'구현 완료(현행)'**로 전환(SSRF 전면 차단·redirect 미추종 `Policy::none`·Content-Type html/plain 제한(미표기 허용)·`FetchedPage → Document 첨부` 변환 구현 반영). DS-60 v0.18과 교차 정합 |
 
 ---
 
@@ -817,6 +818,7 @@ type FetchedPage = {
   title?: string
   text: string
   fetched_at: string
+  truncated: boolean
 }
 ```
 
@@ -826,11 +828,13 @@ type FetchedPage = {
 | `title` | string \| undefined | `<title>` 태그에서 추출한 제목. 없으면 생략 |
 | `text` | string | 태그 제거와 공백 정리를 거친 본문 텍스트. 최대 50KB |
 | `fetched_at` | string | 조회 시각. RFC3339 UTC 문자열 |
+| `truncated` | boolean | 본문이 50KB 한도로 절단되었는지 여부(#29 구현). Content-Type 미대상 등으로 본문 미추출 시 `false` |
 
 ### 10.4 오류 코드
 
 | 코드 | 의미 | 복구 가능성 |
 |------|------|-------------|
+| `URL_BLOCKED` | SSRF 가드 차단: 비허용 scheme(http/https 외) 또는 내부망(loopback·link-local·사설·사내) 호스트, redirect 응답 | 외부 공개 URL로 변경 (재시도 불가) |
 | `INVALID_URL` | URL 파싱 실패 | 입력 수정 후 재시도 가능 |
 | `FETCH_TIMEOUT` | 15초 내 응답 없음 | 네트워크 상태 확인 후 재시도 가능 |
 | `FETCH_FAILED` | HTTP client 생성, 요청, 비정상 HTTP status, 본문 읽기 실패 | 원인별 확인 후 재시도 가능 |
@@ -844,7 +848,9 @@ type FetchedPage = {
 
 ### 10.6 AI 에이전트 웹 콘텐츠 연동 (Redmine #29)
 
-`fetch_url_content`는 이미 존재하나 현재 채팅 경로에서 사용되지 않는다. #29의 목표는 에이전트가 웹 자료를 읽어 작업에 활용하는 것이다.
+> **상태: 구현 완료(현행, 2026-07-16)** — 박개발 BE 구현(`commands/web.rs`), cargo test 114/0 PASS. 아래 트리거·주입 규격은 구현 반영본이다.
+
+#29의 목표는 에이전트가 웹 자료를 읽어 작업에 활용하는 것이다. 기존 `fetch_url_content`를 채팅 첨부 파이프라인에 연결했다.
 
 **트리거 방식 3안과 provider 현실성**
 
@@ -858,7 +864,7 @@ type FetchedPage = {
 
 **프롬프트 주입 규격** — fetch 결과(`FetchedPage`)를 사용자 메시지의 content block으로 주입한다.
 
-- **MVP(권장): 기존 `ProviderContentBlock::DocumentText` 재사용** — 어댑터 변경 0. 매핑:
+- **구현(현행): 기존 `ProviderContentBlock::DocumentText` 재사용** — 어댑터 변경 0. `FetchedPage → ProviderAttachment(kind=Document)` 변환 후 `validate_attachments_for_send`(예산 검증)·`build_content_blocks`(→ `DocumentText`) 경유. 매핑:
 
   | DocumentText 필드 | 웹 주입 값 |
   |-------------------|-----------|
@@ -872,27 +878,29 @@ type FetchedPage = {
 
 - **Phase 2(선택): 전용 `ProviderContentBlock::WebContent { url, title, text, fetched_at, truncated }`** — 의미가 명확하나 4개 어댑터 변환 로직 추가 필요. 이번 범위 밖(tool-use 결과 회수와 함께 도입 검토).
 
-### 10.7 웹 fetch 보안 정책 (SSRF / 내부망 차단) — #29 필수
+### 10.7 웹 fetch 보안 정책 (SSRF / 내부망 차단) — #29 구현 완료
 
-현재 `fetch_url_content`에는 **대상 호스트 제한이 없어** loopback·사내망·클라우드 메타데이터로의 요청이 가능하다. 에이전트/사용자 입력 URL이 내부 자원을 탐침·유출하는 SSRF를 막기 위해 MVP에서 아래 가드를 **필수** 추가한다.
+> **상태: 구현 완료(현행, 2026-07-16)** — `commands/web.rs`에 아래 가드 반영, 차단 대상 단위테스트 포함(114/0 PASS). 에이전트/사용자 입력 URL이 내부 자원을 탐침·유출하는 SSRF를 전면 차단한다.
 
-| 항목 | 정책 |
-|------|------|
-| loopback | `127.0.0.0/8`, `::1`, `localhost` **차단** |
-| link-local / 메타데이터 | `169.254.0.0/16`(예: `169.254.169.254`), `fe80::/10` **차단** |
-| 사설 대역 | `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7` **차단** |
-| 사내 서비스 | 사내 레드마인(`211.117.60.5:8080`) 등 내부 엔드포인트 **전면 차단** (MVP는 허용목록 예외 없음, PM 확정 2026-07-16) |
-| scheme | `http`/`https`만 허용. `file:`/`ftp:`/`data:` 등 **차단** |
-| DNS 재바인딩 | 호스트명 → 해석된 **최종 IP를 검사**(호스트명만 보고 통과 금지) |
-| redirect | reqwest 기본 redirect 추종을 **제한**하고 각 hop의 최종 URL/IP를 재검증(공개→내부 우회 차단). MVP는 redirect 최대 3회 + 매 hop 검사 |
-| Content-Type | `text/html`·`text/plain`만 처리. 그 외(binary/pdf/octet-stream)는 본문 주입 생략 + 사유 표기 |
-| 크기·개수 | 페이지당 50KB(기존) 유지 + **메시지당 최대 URL 수(MVP 3개)** 및 총 주입 텍스트 예산 상한 |
+| 항목 | 정책 | 구현 |
+|------|------|------|
+| loopback | `127.0.0.0/8`, `::1`, `localhost` **차단** | `IpAddr::is_loopback()` |
+| link-local / 메타데이터 | `169.254.0.0/16`(예: `169.254.169.254`), `fe80::/10` **차단** | `is_link_local()` |
+| 사설 대역 | `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7` **차단** | `is_private()` 등 |
+| 사내 서비스 | 사내 레드마인(`211.117.60.5:8080`) 등 내부 엔드포인트 **전면 차단** (허용목록 예외 없음, PM 확정) | 위 IP 규칙 + unspecified/multicast 차단 |
+| scheme | `http`/`https`만 허용. `file:`/`ftp:`/`data:` 등 **차단** | `validate_scheme()` → `URL_BLOCKED` |
+| DNS 재바인딩 | 호스트명 → 해석된 **최종 IP를 검사**(호스트명만 보고 통과 금지) | 해석 IP 검사 |
+| redirect | **미추종(전면 차단)**. `reqwest::redirect::Policy::none()`으로 자동 추종을 끄고, 3xx 응답은 오류 처리(공개→내부 우회 원천 차단) | `Policy::none()` + `is_redirection()` 거절 |
+| Content-Type | `text/html`·`text/plain`만 본문 추출. 그 외(binary/pdf/octet-stream)는 본문 주입 생략(`text=""`, `truncated=false`). **Content-Type 미표기(빈 값)는 허용**(태그 스트립 후 텍스트만 남아 무해) | `content_type_allowed()` |
+| 크기 | 페이지당 본문 50KB 절단(`truncated` 반영), 총 주입 텍스트 예산은 첨부 파이프라인 `validate_attachments_for_send`로 검증 | 기존 첨부 예산 재사용 |
 
-- 신규 오류 코드 제안: `URL_BLOCKED`(내부망/비허용 호스트·scheme 차단). 기존 `INVALID_URL`/`FETCH_TIMEOUT`/`FETCH_FAILED`와 병행.
+> 메시지당 URL 개수 상한(가이드 3개)은 호출측(FE) UX 정책으로 두며, 총 텍스트 예산은 BE 첨부 파이프라인이 강제한다.
+
+- 오류 코드(구현): **`URL_BLOCKED`** (내부망/비허용 호스트·scheme·redirect 차단). 기존 `INVALID_URL`/`FETCH_TIMEOUT`/`FETCH_FAILED`와 병행.
 
 ### 10.8 MVP 범위 (#29)
 
-- **MVP(단일·확실 경로, PM 확정)**: (b) **유저 명시** 웹 첨부 → `fetch_url_content`(**SSRF 전면 차단 가드**·Content-Type 가드 추가) → `DocumentText` 블록 주입(`AttachmentKind::Document` 재사용) → `send_agent_message` 단일 왕복. 전 provider 공통, tool-use 루프 없음, 자동감지 없음.
+- **MVP(BE 구현 완료, 2026-07-16)**: (b) **유저 명시** 웹 첨부 → `fetch_url_content`(**SSRF 전면 차단**·redirect 미추종·Content-Type 제한) → `FetchedPage → Document 첨부` 변환 → `DocumentText` 블록 주입 → `send_agent_message` 단일 왕복. 전 provider 공통, tool-use 루프 없음, 자동감지 없음. BE는 완료; FE 웹 첨부 진입점·`src/ipc/web.ts` wrapper·web chip은 별도 FE 작업.
 - **후속/Phase 2(이번 범위 밖)**: (a) 자동 URL 감지(확인 게이트), (c) tool-use 실행 루프(Claude/OpenAI/Gemini `ToolRequested` 회수→`fetch_url_content` 실행→tool_result 재주입→스트리밍 지속), 전용 `WebContent` 블록, claude_cli 내장 브라우징 정책 정렬.
 
 ---

@@ -24,9 +24,20 @@ describe('시나리오2 — 설정 저장 흐름 (신규 프로젝트, #27)', ()
       localStorage.setItem('lugh:first-run', '1');
     });
     await browser.refresh();
-    // 다이얼로그를 거치지 않고 신규 작성 설정 화면으로 직접 진입
+
+    // #27 라우팅 반영: refresh() 직후 곧바로 navigateVia를 호출하면 리로드가 아직 커밋되지
+    //   않아(vue-router 미마운트) pushState가 유실되고 URL이 '/'에 머무는 레이스가 있다.
+    //   먼저 앱이 홈(/launcher)에 안착 = 라우터가 살아있음을 보장한 뒤 이동한다.
+    await waitForPath('/launcher', 10000);
+
+    // 다이얼로그(WebDriver 제어 불가)를 거치지 않고 신규 작성 설정 화면으로 직접 진입
     await navigateVia('/settings?mode=new');
     await waitForPath('/settings', 8000);
+
+    // popstate가 vue-router 네비게이션을 실제로 유도해 ProjectSettingsView가 렌더됐는지 보장
+    // (URL만 바뀌고 뷰가 안 바뀌었다면 여기서 명확히 실패)
+    const settingsView = await $('.settings-view');
+    await settingsView.waitForExist({ timeout: 8000 });
   });
 
   after(() => {
