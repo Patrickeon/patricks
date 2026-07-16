@@ -9,6 +9,7 @@ import { showToast } from '@/composables/toast'
 import AttachmentChips from '@/components/AttachmentChips.vue'
 import AppModal from '@/components/AppModal.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import MessageContent from '@/components/MessageContent.vue'
 import type { AgentLifecycleState } from '@/ipc/types'
 
 const props = defineProps<{
@@ -183,10 +184,12 @@ async function confirmClear() {
         :class="msg.role"
       >
         <span class="msg-role-label">{{ msg.role === 'user' ? '▶' : props.name }}</span>
-        <span class="msg-content">
-          {{ msg.content }}
-          <span v-if="isStreamingMsg(msg.id)" class="streaming-cursor">▌</span>
-        </span>
+        <MessageContent
+          class="msg-body"
+          :content="msg.content"
+          :is-user="msg.role === 'user'"
+          :streaming="isStreamingMsg(msg.id)"
+        />
       </div>
     </div>
 
@@ -397,23 +400,8 @@ async function confirmClear() {
 
 [data-theme="light"] .msg.user .msg-role-label { color: #7c5cbf; }
 
-.msg-content {
-  color: var(--text-primary);
-  white-space: pre-wrap;
-  word-break: break-word;
-  flex: 1;
-}
-
-.streaming-cursor {
-  display: inline-block;
-  animation: blink 0.8s infinite;
-  color: var(--accent);
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
+/* 메시지 본문은 MessageContent.vue가 렌더 (#30). flex 레이아웃만 부모에서 지정 */
+.msg-body { flex: 1; min-width: 0; }
 
 /* ── 입력 ── */
 .input-zone {

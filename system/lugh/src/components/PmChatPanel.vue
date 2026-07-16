@@ -13,6 +13,7 @@ import { showToast } from '@/composables/toast'
 import AttachmentChips from '@/components/AttachmentChips.vue'
 import AppModal from '@/components/AppModal.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import MessageContent from '@/components/MessageContent.vue'
 import type { AgentLifecycleState } from '@/ipc/types'
 
 const router           = useRouter()
@@ -177,10 +178,11 @@ async function confirmClear() {
         :class="msg.role"
       >
         <div class="msg-role-label">{{ msg.role === 'user' ? '나' : (projectStore.pmConfig?.name ?? 'PM') }}</div>
-        <div class="msg-content">
-          {{ msg.content }}
-          <span v-if="isStreamingMsg(msg.id)" class="streaming-cursor">▌</span>
-        </div>
+        <MessageContent
+          :content="msg.content"
+          :is-user="msg.role === 'user'"
+          :streaming="isStreamingMsg(msg.id)"
+        />
       </div>
     </div>
 
@@ -381,22 +383,7 @@ async function confirmClear() {
 
 [data-theme="light"] .msg.user .msg-role-label { color: #7c5cbf; }
 
-.msg-content {
-  color: var(--text-primary);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.streaming-cursor {
-  display: inline-block;
-  animation: blink 0.8s infinite;
-  color: var(--accent);
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
+/* .msg-content / .streaming-cursor 스타일은 MessageContent.vue로 이동 (#30) */
 
 /* ── 파일 칩 ── */
 .file-chips {

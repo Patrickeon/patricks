@@ -1,7 +1,7 @@
 ---
 doc: DS-40_API명세서
-version: v0.10
-last_updated: 2026-07-12
+version: v0.12
+last_updated: 2026-07-16
 status: draft
 author: Architect
 ---
@@ -22,6 +22,8 @@ author: Architect
 | v0.8 | 2026-07-11 | Architect | Redmine #17 설계전환: 임베디드 브라우저를 main 콘텐츠 영역 강제 핀 고정(child+좌표추종) 방식에서 **독립 이동 가능 창**으로 전환. §9 개요·URL규칙·`browser_open`(geometry 선택적 초기값화)·`browser:navigation`·정합성 항목 개정, `browser_resize` 폐기예정 표기. 구현 대기(전환상태 §9.1 명시), DS-60 v0.10과 교차 정합 |
 | v0.9 | 2026-07-11 | Architect | Redmine #17 **구현 완료 현행화**(BE/FE 구현 종료): §9.1 전환상태 주석 → 전환 완료(2026-07-11)·command 표에서 `browser_resize` 삭제, `browser_open` parent 제거·decorations/resizable true·geometry 전 인자 optional(기본 960×720) 확정, §9.8 `browser_resize` 상세절 삭제(command 완전 제거), §9.10 프론트 `ResizeObserver`/`resizeBrowser` 제거 확정, §9.11 목표/현행 구분 문단을 전환 완료 현행 기준으로 재작성. DS-60 v0.11과 교차 정합 |
 | v0.10 | 2026-07-12 | Architect | Redmine #23 **Claude OAuth/CLI 이미지 vision 지원 구현 완료 현행화**: §7.3 provider capability 표의 `Claude CLI/OAuth shell provider` 행을 'MVP 이미지 미지원 → `ATTACHMENT_UNSUPPORTED`'에서 'stream-json content 배열로 이미지 base64 전달(Anthropic Messages 스키마, #23), vision 미지원 모델만 `ATTACHMENT_UNSUPPORTED`'로 갱신. `claude_cli` `supports_vision=true` 반영 |
+| v0.11 | 2026-07-16 | Architect | Redmine #29 **AI 에이전트 웹검색 연동 설계**(초안): §10.6 웹 콘텐츠 연동 트리거 방식(결정적 pre-fetch 주입 MVP vs tool-use 루프) 및 프롬프트 주입 규격(`DocumentText` content block 재사용) 신설, §10.7 **SSRF/내부망 차단 보안 정책**(loopback·link-local·사설대역·사내 레드마인 기본 차단, redirect 재검증, Content-Type 제한) 신설, §10.8 MVP 범위·단계 신설, §7.3에 provider별 tool-use 배선 현황 각주 추가. 코드 변경 없음(설계). DS-60 v0.16과 교차 정합 |
+| v0.12 | 2026-07-16 | Architect | Redmine #29 **PM 결정 확정 반영**: (1) 트리거 **(b) 유저 명시 방식만 MVP**(자동감지는 후속), (2) 주입 **`DocumentText` 재사용 확정**, (3) 내부망/localhost **전면 차단 확정**, (4) **`AttachmentKind` = `Document` 재사용**(`Web` 신설 안 함), (5) tool-use 루프 **Phase 2(이번 범위 밖)**. §10.6 트리거 표·결론, §10.8 MVP 범위를 확정 문구로 정리. DS-60 v0.17과 교차 정합 |
 
 ---
 
@@ -475,6 +477,8 @@ Gemini 연동은 provider/model capability가 vision을 지원할 때 `content_b
 
 Provider Adapter는 첨부를 조용히 누락하지 않는다. 하나 이상의 첨부가 미지원이면 메시지 전송 전체를 거절하고 frontend가 첨부 제거 또는 지원 provider 선택을 안내한다.
 
+> **Tool-use(도구호출) 배선 현황 (Redmine #29 참조)**: `ProviderMessageRequest.tools`(`ToolDefinition[]`)와 `ProviderEvent::ToolRequested`가 모델 계층에 정의되어 있고 **Claude/OpenAI/Gemini 어댑터는 `tools`를 API body에 직렬화하고 tool 요청을 `ToolRequested`로 emit**한다. 그러나 (1) 현재 `send_message`는 `tools: vec![]`로 항상 비우고, (2) tool 실행→결과 재주입→스트리밍 지속의 **agentic 루프가 미구현**이다(`agent:tool_requested` emit까지만). `claude_cli`는 tools 미처리이나 실제 Claude CLI가 WebFetch/WebSearch를 내장한다. 따라서 #29 웹검색의 tool-use 방식(§10.6 (c))은 이 루프 구현이 선행되어야 하며 Phase 2로 분리한다.
+
 ## 8. Redmine API 명세
 
 ### 8.1 Endpoint
@@ -837,6 +841,59 @@ type FetchedPage = {
 - JavaScript 실행 결과를 수집하지 않는다.
 - binary/PDF 등 HTML이 아닌 응답은 텍스트 품질이 보장되지 않는다.
 - 인증이 필요한 페이지는 public HTML 응답 범위까지만 처리된다.
+
+### 10.6 AI 에이전트 웹 콘텐츠 연동 (Redmine #29)
+
+`fetch_url_content`는 이미 존재하나 현재 채팅 경로에서 사용되지 않는다. #29의 목표는 에이전트가 웹 자료를 읽어 작업에 활용하는 것이다.
+
+**트리거 방식 3안과 provider 현실성**
+
+| 방식 | 설명 | provider 현실성 | 판정(PM 확정 2026-07-16) |
+|------|------|-----------------|------|
+| (a) 자동 URL 감지 | 사용자 메시지 내 URL을 자동 fetch해 컨텍스트 삽입 | 전 provider 공통(결정적). 단 오탐·원치 않는 외부요청·prompt bloat 위험 | **후속**(MVP 제외) |
+| (b) 명시적 URL 첨부 | 사용자가 "웹 첨부"로 URL을 확정 → fetch → 삽입 | 전 provider 공통(결정적). 사용자 의도 명확 | **✅ MVP 확정** |
+| (c) 에이전트 도구호출(tool use) | 모델이 스스로 `fetch`/`web_search` 도구 호출 | Claude/OpenAI/Gemini는 `tools` 직렬화 + `ToolRequested` emit **배선만 존재, 실행→결과 재주입 루프 미구현**. claude_cli는 CLI 내장 WebFetch/WebSearch로 자체 브라우징(우리 배선 밖) | **Phase 2**(이번 범위 밖) |
+
+> **결론(PM 확정)**: MVP는 **(b) 유저 명시 웹 첨부만**으로 하는 **결정적 pre-fetch 주입** 방식. 자동감지(a)는 후속 과제로 분리하며, MVP에서 무단 자동 외부요청은 하지 않는다. tool-use 루프(c)는 실행루프·스트리밍 상호작용 구현 부담이 크고 provider별 편차가 커 Phase 2로 분리한다.
+
+**프롬프트 주입 규격** — fetch 결과(`FetchedPage`)를 사용자 메시지의 content block으로 주입한다.
+
+- **MVP(권장): 기존 `ProviderContentBlock::DocumentText` 재사용** — 어댑터 변경 0. 매핑:
+
+  | DocumentText 필드 | 웹 주입 값 |
+  |-------------------|-----------|
+  | `filename` | `title ?? url` |
+  | `media_type` | `"text/html"` |
+  | `extracted_text` | `FetchedPage.text` (최대 50KB) |
+  | `truncated` | 50KB 절단 여부 |
+  | (본문 머리표기) | `[웹 자료: {title} — {url} (조회 {fetched_at})]` 접두 |
+
+  → `chat_attachment::build_content_blocks` 경로로 흘려 Claude/OpenAI/Gemini/claude_cli 전 어댑터가 이미 처리하는 텍스트 블록으로 전달. **[PM 확정] `AttachmentKind`는 신규 `Web`을 만들지 않고 기존 `Document`를 재사용**하며, `FetchedPage → ProviderAttachment(kind=Document)` 변환 헬퍼만 추가한다(BE 소량).
+
+- **Phase 2(선택): 전용 `ProviderContentBlock::WebContent { url, title, text, fetched_at, truncated }`** — 의미가 명확하나 4개 어댑터 변환 로직 추가 필요. 이번 범위 밖(tool-use 결과 회수와 함께 도입 검토).
+
+### 10.7 웹 fetch 보안 정책 (SSRF / 내부망 차단) — #29 필수
+
+현재 `fetch_url_content`에는 **대상 호스트 제한이 없어** loopback·사내망·클라우드 메타데이터로의 요청이 가능하다. 에이전트/사용자 입력 URL이 내부 자원을 탐침·유출하는 SSRF를 막기 위해 MVP에서 아래 가드를 **필수** 추가한다.
+
+| 항목 | 정책 |
+|------|------|
+| loopback | `127.0.0.0/8`, `::1`, `localhost` **차단** |
+| link-local / 메타데이터 | `169.254.0.0/16`(예: `169.254.169.254`), `fe80::/10` **차단** |
+| 사설 대역 | `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7` **차단** |
+| 사내 서비스 | 사내 레드마인(`211.117.60.5:8080`) 등 내부 엔드포인트 **전면 차단** (MVP는 허용목록 예외 없음, PM 확정 2026-07-16) |
+| scheme | `http`/`https`만 허용. `file:`/`ftp:`/`data:` 등 **차단** |
+| DNS 재바인딩 | 호스트명 → 해석된 **최종 IP를 검사**(호스트명만 보고 통과 금지) |
+| redirect | reqwest 기본 redirect 추종을 **제한**하고 각 hop의 최종 URL/IP를 재검증(공개→내부 우회 차단). MVP는 redirect 최대 3회 + 매 hop 검사 |
+| Content-Type | `text/html`·`text/plain`만 처리. 그 외(binary/pdf/octet-stream)는 본문 주입 생략 + 사유 표기 |
+| 크기·개수 | 페이지당 50KB(기존) 유지 + **메시지당 최대 URL 수(MVP 3개)** 및 총 주입 텍스트 예산 상한 |
+
+- 신규 오류 코드 제안: `URL_BLOCKED`(내부망/비허용 호스트·scheme 차단). 기존 `INVALID_URL`/`FETCH_TIMEOUT`/`FETCH_FAILED`와 병행.
+
+### 10.8 MVP 범위 (#29)
+
+- **MVP(단일·확실 경로, PM 확정)**: (b) **유저 명시** 웹 첨부 → `fetch_url_content`(**SSRF 전면 차단 가드**·Content-Type 가드 추가) → `DocumentText` 블록 주입(`AttachmentKind::Document` 재사용) → `send_agent_message` 단일 왕복. 전 provider 공통, tool-use 루프 없음, 자동감지 없음.
+- **후속/Phase 2(이번 범위 밖)**: (a) 자동 URL 감지(확인 게이트), (c) tool-use 실행 루프(Claude/OpenAI/Gemini `ToolRequested` 회수→`fetch_url_content` 실행→tool_result 재주입→스트리밍 지속), 전용 `WebContent` 블록, claude_cli 내장 브라우징 정책 정렬.
 
 ---
 
